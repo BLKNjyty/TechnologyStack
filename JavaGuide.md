@@ -172,10 +172,6 @@ public static void main(String[] args) {
 
 > flapmap和map的区别：
 
-##### groupBy
-
-
-
 #### 规约操作
 
 规约操作（*reduction operation*）又被称作折叠操作（*fold*），是通过某个连接动作将所有元素汇总成一个汇总结果的过程。元素求和、求最大值或最小值、求出元素总个数、将所有元素转换成一个列表或集合，都属于规约操作。*Stream*类库有两个通用的规约操作`reduce()`和`collect()`，也有一些为简化书写而设计的专用规约操作，比如`sum()`、`max()`、`min()`、`count()`等。
@@ -1927,9 +1923,7 @@ String str = String.format("%d %<,d", num);
 
 ### 11.常用工具类
 
-#### 	11.1.CaseFormat
-
-#### 	11.2.JsonUtils
+#### 	11.1.JsonUtils
 
 ```java
 public class JsonUtils {
@@ -1963,11 +1957,231 @@ public class JsonUtils {
 }
 ```
 
-#### 	11.3.FieldUtils
+#### 11.2.BeanUtils
 
-#### 11.4.BeanUtils
+```java
 
-#### 11.5DateUtils
+import com.ctrip.ibu.tuma.exception.BeanUtilsException;
+import org.springframework.beans.BeanWrapper;
+import org.springframework.beans.BeanWrapperImpl;
+import org.springframework.util.CollectionUtils;
+
+import java.beans.PropertyDescriptor;
+import java.lang.reflect.Field;
+import java.util.*;
+
+/**
+ * 类转换
+ */
+public class BeanUtils {
+    /**
+     * <pre>
+     *     List<UserBean> userBeans = userDao.queryUsers();
+     *     List<UserDTO> userDTOs = BeanUtil.batchTransform(UserDTO.class, userBeans);
+     * </pre>
+     */
+    public static <T> List<T> batchTransform(final Class<T> clazz, List<?> srcList) {
+        if (CollectionUtils.isEmpty(srcList)) {
+            return Collections.emptyList();
+        }
+
+        List<T> result = new ArrayList<>(srcList.size());
+        for (Object srcObject : srcList) {
+            result.add(transform(clazz, srcObject));
+        }
+        return result;
+    }
+
+    /**
+     * 封装{@link org.springframework.beans.BeanUtils  copyProperties}，惯用与直接将转换结果返回
+     *
+     * <pre>
+     *      UserBean userBean = new UserBean("username");
+     *      return BeanUtil.transform(UserDTO.class, userBean);
+     * </pre>
+     */
+    public static <T> T transform(Class<T> clazz, Object src) {
+        if (src == null) {
+            return null;
+        }
+        T instance;
+        try {
+            instance = clazz.newInstance();
+        } catch (Exception e) {
+            throw new BeanUtilsException(e);
+        }
+        org.springframework.beans.BeanUtils.copyProperties(src, instance, getNullPropertyNames(src));
+        return instance;
+    }
+
+    private static String[] getNullPropertyNames(Object source) {
+        final BeanWrapper src = new BeanWrapperImpl(source);
+        PropertyDescriptor[] pds = src.getPropertyDescriptors();
+
+        Set<String> emptyNames = new HashSet<>();
+        for (PropertyDescriptor pd : pds) {
+            Object srcValue = src.getPropertyValue(pd.getName());
+            if (srcValue == null) {
+                emptyNames.add(pd.getName());
+            }
+        }
+        String[] result = new String[emptyNames.size()];
+        return emptyNames.toArray(result);
+    }
+
+
+    /**
+     * 用于将一个列表转换为列表中的对象的某个属性映射到列表中的对象
+     *
+     * <pre>
+     *      List<UserDTO> userList = userService.queryUsers();
+     *      Map<Integer, userDTO> userIdToUser = BeanUtil.mapByKey("userId", userList);
+     * </pre>
+     *
+     * @param key 属性名
+     */
+    @SuppressWarnings("unchecked")
+    public static <K, V> Map<K, V> mapByKey(String key, List<?> list) {
+        Map<K, V> map = new HashMap<>();
+        if (CollectionUtils.isEmpty(list)) {
+            return map;
+        }
+        try {
+            Class<?> clazz = list.get(0).getClass();
+            Field field = deepFindField(clazz, key);
+            if (field == null) throw new IllegalArgumentException("Could not find the key");
+            field.setAccessible(true);
+            for (Object o : list) {
+                map.put((K) field.get(o), (V) o);
+            }
+        } catch (Exception e) {
+            throw new BeanUtilsException(e);
+        }
+        return map;
+    }
+
+    /**
+     * 根据列表里面的属性聚合
+     *
+     * <pre>
+     *       List<ShopDTO> shopList = shopService.queryShops();
+     *       Map<Integer, List<ShopDTO>> city2Shops = BeanUtil.aggByKeyToList("cityId", shopList);
+     * </pre>
+     */
+    @SuppressWarnings("unchecked")
+    public static <K, V> Map<K, List<V>> aggByKeyToList(String key, List<?> list) {
+        Map<K, List<V>> map = new HashMap<>();
+        if (CollectionUtils.isEmpty(list)) {// 防止外面传入空list
+            return map;
+        }
+        try {
+            Class<?> clazz = list.get(0).getClass();
+            Field field = deepFindField(clazz, key);
+            if (field == null) {
+                throw new IllegalArgumentException("Could not find the key");
+            }
+            field.setAccessible(true);
+            for (Object o : list) {
+                K k = (K) field.get(o);
+                map.computeIfAbsent(k, k1 -> new ArrayList<>());
+                map.get(k).add((V) o);
+            }
+        } catch (Exception e) {
+            throw new BeanUtilsException(e);
+        }
+        return map;
+    }
+
+    /**
+     * 用于将一个对象的列表转换为列表中对象的属性集合
+     *
+     * <pre>
+     *     List<UserDTO> userList = userService.queryUsers();
+     *     Set<Integer> userIds = BeanUtil.toPropertySet("userId", userList);
+     * </pre>
+     */
+    @SuppressWarnings("unchecked")
+    public static <K> Set<K> toPropertySet(String key, List<?> list) {
+        Set<K> set = new HashSet<>();
+        if (CollectionUtils.isEmpty(list)) {// 防止外面传入空list
+            return set;
+        }
+        try {
+            Class<?> clazz = list.get(0).getClass();
+            Field field = deepFindField(clazz, key);
+            if (field == null) {
+                throw new IllegalArgumentException("Could not find the key");
+            }
+            field.setAccessible(true);
+            for (Object o : list) {
+                set.add((K) field.get(o));
+            }
+        } catch (Exception e) {
+            throw new BeanUtilsException(e);
+        }
+        return set;
+    }
+
+
+    private static Field deepFindField(Class<?> clazz, String key) {
+        Field field = null;
+        while (!clazz.getName().equals(Object.class.getName())) {
+            try {
+                field = clazz.getDeclaredField(key);
+                if (field != null) {
+                    break;
+                }
+            } catch (Exception e) {
+                clazz = clazz.getSuperclass();
+            }
+        }
+        return field;
+    }
+
+
+    /**
+     * 获取某个对象的某个属性
+     */
+    public static Object getProperty(Object obj, String fieldName) {
+        try {
+            Field field = deepFindField(obj.getClass(), fieldName);
+            if (field != null) {
+                field.setAccessible(true);
+                return field.get(obj);
+            }
+        } catch (Exception e) {
+            throw new BeanUtilsException(e);
+        }
+        return null;
+    }
+
+    /**
+     * 设置某个对象的某个属性
+     */
+    public static void setProperty(Object obj, String fieldName, Object value) {
+        try {
+            Field field = deepFindField(obj.getClass(), fieldName);
+            if (field != null) {
+                field.setAccessible(true);
+                field.set(obj, value);
+            }
+        } catch (Exception e) {
+            throw new BeanUtilsException(e);
+        }
+    }
+
+    /**
+     * @param source
+     * @param target
+     */
+    public static void copyProperties(Object source, Object target, String... ignoreProperties) {
+        org.springframework.beans.BeanUtils.copyProperties(source, target, ignoreProperties);
+    }
+}
+
+```
+
+#### 11.3DateUtils
 
 ```java
 //日期的获取和各个格式的转换
@@ -2041,7 +2255,7 @@ public class DateUtils {
 }
 ```
 
-#### 11.5 okhttp3工具类
+#### 11.4 okhttp3工具类
 
 ```java
 public interface OsgClient {
@@ -2139,9 +2353,319 @@ public class OsgClientImpl extends AbstractOsgClient implements OsgClient{
 
 ```
 
-#### 11.6下载文件
+#### 11.5 分页查询再做某事
 
-#### 11.7发送邮件
+```java
+ batchExecuteAndDo(bagTaskId,(data -> {
+                    List<BagTaskInfo> bagTaskInfos= (List<BagTaskInfo>) data;
+                    try {
+                        dealMachineTranslation(bagTaskInfos, finalBagMtConfigs,bagTaskId,requirement,costcenterName,costcenterCode,bagTask);
+                    } catch (Exception e) {
+                        log.error("[[type=BagMachineTranslationService]]Error dealMachineTranslation");
+                    }
+                }));
+```
+
+```java
+protected void batchExecuteAndDo(Long bagTaskId,BatchExecutor executor) throws SQLException {
+        int pageNo = 1;
+        int pageSize = 1000;
+        BootStrapTableData<BagTaskInfo> bootStrapTableData;
+        do {
+            bootStrapTableData = bagTaskInfoDao.queryByBagTaskIdPageable(bagTaskId,pageNo, pageSize);
+            if (ObjectUtils.isEmpty(bootStrapTableData.getRows())) {
+                break;
+            }
+            executor.execute(bootStrapTableData.getRows());
+            ++pageNo;
+        } while (bootStrapTableData.getRows().size() == pageSize);
+    }
+protected  void dealMachineTranslation(){
+    
+}
+```
+
+```java
+public interface BatchExecutor {
+
+   void execute(Object data) throws SQLException;
+
+}
+```
+
+#### 11.6文件上传下载
+
+##### 异步形式：
+
+![上传下载1](D:\Users\yjin5\ibu-doc\knowsCollection\images\上传下载1.jpg)
+
+点击下载：出现
+
+![上传下载2](D:\Users\yjin5\ibu-doc\knowsCollection\images\上传下载2.jpg)
+
+右边的提示，当变为绿色对号时，生成报表成功，点击文件名可下载相应的excel表格。
+
+##### 表设计：
+
+![上传下载3](D:\Users\yjin5\ibu-doc\knowsCollection\images\上传下载3.jpg)
+
+##### 步骤：
+
+1.先创建notify_record，状态为正在生成报表
+
+2.qmq发送消息异步上传到s3，然后生成file_stroe数据，更新notify_record
+
+3.用户点击文件名下载：根据id找notify_record，找到的对应的fileStorage，下载。
+
+##### 代码：
+
+```java
+//生产者
+String fileName = String.format("MT_cost_report_%1$s-%2$s.xlsx", DateFormatUtils.format(bagMtReportRequestDto.getBeginTime(), DATE_FORMAT_FILE_EXPORT),DateFormatUtils.format(bagMtReportRequestDto.getEndTime(), DATE_FORMAT_FILE_EXPORT));
+        NotifyRecordEntity notifyRecordEntity = new NotifyRecordEntity();
+        notifyRecordEntity.setTitle(NotifyType.ReportExporting.getDesc());
+        notifyRecordEntity.setContent(fileName);
+        notifyRecordEntity.setType(NotifyType.ReportExporting.getIndex());
+        notifyRecordEntity.setSender(NotifyConstant.DEFAULT_MAIL_SENDER);
+        notifyRecordEntity.setReceiverId(user.getId());
+        notifyRecordEntity.setReceiverType(NotifyReceiverType.User.getIndex());
+        notifyRecordEntity.setStatus(NotifyStatus.INITIATED.getIndex());
+        notifyRecordEntity.setCreateTime(new Date());
+        notifyRecordEntity.setRefTable(NotifyRefTable.ReportExport.getIndex());
+        notifyRecordEntity.setCreateTime(new Date());
+        notifyRecordEntity.setRefTableId(-1L);
+        Long notifyRecordId = notifyRecordDao.insertWithKeyHolder(notifyRecordEntity);
+        BagMtExportEntity bagMtExportEntity = new BagMtExportEntity();
+        bagMtExportEntity.setFilename(fileName);
+        bagMtExportEntity.setCurrentUserId(user.getId());
+        bagMtExportEntity.setNotifyId(notifyRecordId);
+        bagMtExportEntity.setBagMtReportRequestDto(bagMtReportRequestDto);
+
+        bagDataPushQmQProducer.sendBagMtReportExport(bagMtExportEntity);
+```
+
+```java
+//消费者
+public void export(BagMtExportEntity bagMtReportEntity) throws SQLException, IOException {
+
+        byte[] fileByteArrayToUpload = getFileByteArrayToUpload(bagMtReportEntity.getFilename(), bagMtReportEntity.getBagMtReportRequestDto());
+        String s3FilePath = tumaFileHelper.uploadFile(fileByteArrayToUpload);
+        FileStorageEntity fileStorageEntity = new FileStorageEntity();
+        fileStorageEntity.setFileStorageType(FileStorageType.BAG.getIndex());
+        fileStorageEntity.setFileStorageRefId(bagMtReportEntity.getNotifyId());
+        fileStorageEntity.setCreator(bagMtReportEntity.getCurrentUserId());
+        fileStorageEntity.setFileId(bagMtReportEntity.getFilename());
+        fileStorageEntity.setFileUrl(s3FilePath);
+        fileStorageEntity.setFileHash(ShaMd5.encryptMD5(fileByteArrayToUpload));
+        Long fileStorageId = fileStorageDao.insert(fileStorageEntity);
+
+        NotifyRecordEntity notifyRecord = notifyRecordDao.queryById(bagMtReportEntity.getNotifyId());
+        notifyRecord.setExtraData(JsonUtils.toJsonGson(fileStorageEntity));
+        notifyRecord.setTitle(NotifyType.processed.getDesc());
+        notifyRecord.setType(NotifyType.processed.getIndex());
+        notifyRecord.setRefTableId(fileStorageId);
+        notifyRecord.setStatus(NotifyStatus.TO_NOTIFY.getIndex());
+        notifyRecordDao.updateById(notifyRecord);
+    }
+
+    private byte[] getFileByteArrayToUpload(String fileName, BagMtReportRequestDto bagMtReportRequestDto) throws IOException, SQLException {
+        List<BagMtReportDto> bagMtReportDtos = bagMachineTransaltionService.queryBagMachineTranslationReport(bagMtReportRequestDto.getBeginTime(), bagMtReportRequestDto.getEndTime(), bagMtReportRequestDto.getBagTaskId());
+
+        Class typeClass=BagMtReportDto.class;
+        List<Object> dataList = bagMtReportDtos.stream().filter(Objects::nonNull).collect(Collectors.toList());
+        return ExcelHelper.writeBytes(fileName, dataList, typeClass);
+    }
+```
+
+```java
+//下载
+public ResponseEntity<byte[]> downloadFile(Long id) throws SQLException, IOException {
+        NotifyRecord record = notifyRecordDao.queryByPk(id);
+        if (record == null) {
+            throw new IllegalStateException("download failed.");
+        }
+        String extraData = record.getExtraData();
+        FileStorage fileStorage = SerializeHelper.deserializeJson(extraData, FileStorage.class);
+        byte[] fileBytes = IOUtils.toByteArray(fileWSService.getFileStream(fileStorage.getFileUrl()));
+        HttpHeaders headers = Servlets.getFileDownloadHeader(fileStorage.getFileId());
+        headers.set("Set-Cookie", "fileDownload=true;Path=/");
+        return new ResponseEntity<>(fileBytes, headers, HttpStatus.OK);
+
+    }
+```
+
+#### 11.7 发送邮件
+
+```html
+//定义邮件模板
+<html lang="en" xml:lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:Web="http://schemas.live.com/Web/">
+
+<head>
+    <meta content="text/html; charset=utf-8" http-equiv="content-type" />
+</head>
+<body>
+<strong>Content:</strong><br />
+
+    #if( $wfStatus &&  $wfStatus == "rejected")
+    <p>You translation project<a href="$projectUrl"> [$projectName]</a> has been rejected. Please check the comment below:</p>
+    <p>
+        Reject comment:
+        If you need to send the project again, please do so after modifying it as requested the soonest, or there will be a risk of delay. Thank you.
+    </p>>
+    #end
+    #if( $wfStatus &&  $wfStatus == "sending")
+    <p>Please check <a href="$projectUrl"> [$projectName]</a> and send again.</p>
+
+    #end
+    #if( $wfStatus &&  $wfStatus == "deadline")
+    <p><a href="$projectUrl">[$projectName]</a> will be completed by $projectCompletedTime</p>
+    #end
+    #if( $wfStatus &&  $wfStatus == "completed")
+    <p>See details here: <a href="$projectUrl">[$projectName]</a></p>
+    #end
+
+</body>
+```
+
+```java
+//定义主题和模板位置
+public interface EmailConstant {
+
+    String EMAIL_SUBJECT_COMMENT_NOTIFY = "New comments for [%1$d][%2$s] - Tuma";
+
+    String TEMPLATE_PATH_COMMENT_NOTIFY = "mail/comment_notify.vm";
+
+    String EMAIL_SUBJECT_PROJECT_STATUS_CHANGED= "Your translation project [%1$s] has been %2$s";
+
+    String  TEMPLATE_PATH_PROJECT_STATUS_CHANGED= "mail/project_status_changed_notify.vm";
+
+}
+```
+
+发送邮件业务代码：
+
+```java
+private void sendEmailWhenProjectStatusChanged(ProjectEntity project,String estCompletionTimeStr,String subjectContent,String wfStatus){
+        String subject=String.format(EmailConstant.EMAIL_SUBJECT_PROJECT_STATUS_CHANGED,project.getName(),subjectContent);
+        Map<String, Object> contentMap = new HashMap<>();
+        contentMap.put("projectName",project.getName());
+        String projectUrl="http://shark.ibu.ctripcorp.com/project/"+project.getProjectId()+"/key";
+        contentMap.put("projectUrl",projectUrl);
+        contentMap.put("wfStatus",wfStatus);
+        if(!StringUtils.isEmpty(estCompletionTimeStr)){
+            contentMap.put("projectCompletedTime",estCompletionTimeStr);
+        }
+        String userName = securityUserIf.queryUserById(project.getCreator()).getUserName();
+        String[] userNames={userName};
+        YemailMailEntity entity = yemailService.convertToCtranUserYemailEntity(contentMap,EmailConstant.TEMPLATE_PATH_PROJECT_STATUS_CHANGED,userNames,subject);
+        CommonResponse send = yemailService.send(entity);
+        if(!send.isSuccess()){
+            log.error("[[type=ProjectService]] can not send email, maybe the user not existed or not enabled, mail:{}", JsonUtils.toJsonGson(entity));
+        }
+   }
+
+```
+
+使用到的工具类：
+
+```java
+public class YemailServiceImpl implements IYemailService {
+
+
+    @Override
+    public CommonResponse send(YemailMailEntity entity) {
+        try {
+            YemailClient.send(entity);
+            return CommonResponse.success();
+        } catch (YemailException e) {
+            log.error("[[type=YemailServiceImpl]] can not send email, maybe the user not existed or not enabled, mail:{}", JsonUtils.toJsonGson(entity), e);
+            return CommonResponse.error("can not send email, maybe the user not existed or not enabled");
+        }
+    }
+
+    @Override
+    public YemailMailEntity convertToYemailEntity(Map<String, Object> templateVariableMap, String templatePath, String[] groups, String subject) {
+        String mailBody = VelocityEngineUtils.mergeTemplate(templatePath, templateVariableMap);
+        YemailMailEntity entity = new YemailMailEntity();
+        entity.setBodyContent(mailBody);
+        entity.setRecipientGroups(groups);
+        entity.setSubject(subject);
+        return entity;
+    }
+
+    @Override
+    public YemailMailEntity convertToCtranUserYemailEntity(Map<String, Object> templateVariableMap, String templatePath, String[] users, String subject) {
+        YemailMailEntity entity = convertToYemailEntity(templateVariableMap, templatePath, users, subject);
+        entity.setMailGroupType(YemailGroupType.TUMA_USER);
+        return entity;
+    }
+
+    @Override
+    public YemailMailEntity convertToCtranGroupYemailEntity(Map<String, Object> templateVariableMap, String templatePath, String[] users, String subject) {
+        YemailMailEntity entity = convertToYemailEntity(templateVariableMap, templatePath, users, subject);
+        entity.setMailGroupType(YemailGroupType.CTRAN_GROUP);
+        return entity;
+    }
+
+}
+```
+
+```java
+public class VelocityEngineUtils {
+
+    private static final String DEFAULT_ENCODING = "utf-8";
+
+    public static void mergeTemplate(
+            VelocityEngine velocityEngine, String templateLocation, String encoding,
+            Map<String, Object> model, Writer writer) throws VelocityException {
+
+        VelocityContext velocityContext = new VelocityContext(model);
+        velocityEngine.mergeTemplate(templateLocation, encoding, velocityContext, writer);
+    }
+
+    public static String mergeTemplateIntoString(VelocityEngine velocityEngine, String templateLocation,
+                                                 String encoding, Map<String, Object> model) throws VelocityException {
+
+        StringWriter result = new StringWriter();
+        mergeTemplate(velocityEngine, templateLocation, encoding, model, result);
+        return result.toString();
+    }
+
+    public static String mergeTemplate(final String tempLocation, final Map<String, Object> model) {
+        VelocityEngine ve = getInstance();
+        ve.setProperty(RuntimeConstants.RESOURCE_LOADER, "classpath");
+        ve.setProperty("classpath.resource.loader.class", ClasspathResourceLoader.class.getName());
+        ve.init();
+        return VelocityEngineUtils.mergeTemplateIntoString(ve, tempLocation, DEFAULT_ENCODING, model);
+
+    }
+
+    public static String templateToString(final String tempLocation) {
+        Velocity.init();
+        Template t = Velocity.getTemplate(tempLocation);
+
+        VelocityContext ctx = new VelocityContext();
+
+        Writer writer = new StringWriter();
+        t.merge(ctx, writer);
+        return writer.toString();
+
+    }
+
+    public static VelocityEngine getInstance() {
+        return VelocityEngineHodler.instance;
+    }
+
+    private static class VelocityEngineHodler {
+
+        private static VelocityEngine instance = new VelocityEngine();
+    }
+
+}
+
+```
+
+
 
 ### 12.String
 
@@ -2443,6 +2967,142 @@ public class SynchronizedDemo2 {
 ### 18.[ReentrantLock的公平锁，响应中断和限时等待](https://baijiahao.baidu.com/s?id=1648624077736116382&wfr=spider&for=pc)
 
 [ReentrantLock的选择性通知](https://www.jianshu.com/p/dde297897eee)
+
+### 19.类内部执行顺序
+
+#### 普通情况：
+
+```java
+public class Outer {
+    private int age;
+    private String name;
+    public Outer(){
+        System.out.println("Outer.init()");//3
+    }
+    {
+        System.out.println("Outer.instance()");//2
+    }
+    static {
+        System.out.println("Outer.static()");//1
+    }
+    public void func(){
+        System.out.println(name+age);
+    }
+    class Inter{
+        public static final int age2=10;
+        private String name2;
+        public Inter(){
+            System.out.println("Inter.init()");//5
+        }
+        {
+            System.out.println("Inter.instance()");//4
+        }
+        public void func(){
+            System.out.println(name+age);
+        }
+    }
+}
+public class TestDemo {
+    public static void main(String[] args) {
+        Outer.Inter inter=new Outer().new Inter();
+    }
+}
+```
+
+执行顺序：首先执行的是外部类的静态代码块，外部类实例代码块，外部类构造函数，然后是内部类实例代码块，内部类构造函数。最后还有内部类的成员方法，代码中并没有加入。
+
+#### 静态内部类：
+
+静态内部类大体和实例内部类相似，不过内部类要调用外部类成员，需要提供有外部类引用的构造函数。
+
+```java
+public class Outer {
+    private int age;
+    private String name;
+    public Outer(){
+        System.out.println("Outer.init()");
+    }
+    {
+        System.out.println("Outer.instance()");
+    }
+    static {
+        System.out.println("Outer.static()");
+    }
+    public void func(){
+        System.out.println("Outer.func()");
+    }
+    static class Inter{
+        private static int age2=10;
+        private String name2;
+        private Outer outer;
+        public Inter(Outer outer){
+            this.outer=outer;
+            System.out.println("Inter.init()");
+        }
+        public Inter(){
+            System.out.println("Inter.init()");
+        }
+        public void func1(){
+            outer.func();
+            System.out.println("Inter.func()");
+        }
+    }
+}
+public class TestDemo {
+    public static void main(String[] args) {
+        Outer outer=new Outer();
+        Outer.Inter inter=new Outer.Inter(outer);
+        inter.func1();
+    }
+}
+```
+
+#### 继承时：
+
+```java
+public class Parent {
+    private int age;
+    private String name;
+    public Parent(){
+        System.out.println("parent.init()");//4
+    }
+    {
+        System.out.println("parent.instance");//3
+    }
+    static {
+        System.out.println("parent.static");//1
+    }
+    public void func(){
+        System.out.println("parent.func()");//8
+    }
+}
+public class Son extends Parent{
+    private String school;
+    public Son(){
+        System.out.println("Son.init()");//6
+    }
+    {
+        System.out.println("Son.instance()");//5
+    }
+    static{
+        System.out.println("Son.static");//2
+    }
+    public void func(){
+        System.out.println("Son.func()");//7
+    }
+}
+public class TestDemo {
+    public static void main(String[] args) {
+        Son son=new Son();
+        Parent parent=new Son();
+        parent.func();
+        son.func();
+    }
+}
+
+```
+
+
 
 ## 数据库
 
