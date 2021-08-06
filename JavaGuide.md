@@ -310,8 +310,6 @@ String joined = stream.collect(Collectors.joining(",", "{", "}"));// "{I,love,yo
 
 详情见上面的例子。
 
-
-
 ```java
 //测试代码
 public class Java8TestStream {
@@ -3102,7 +3100,279 @@ public class TestDemo {
 
 ```
 
+### 20.Jackson
 
+#### JSON字段与Java字段匹配原理
+
+​	三种方式:
+
+> 1.Jackson通过 将JSON字段的名称与Java对象中的getter和setter方法相匹配，将JSON对象的字段映射到Java对象中的字段。Jackson删除了getter和setter方法名称的“get”和“set”部分，并将剩余名称的第一个字符转换为小写。
+>  2.Jackson还可以通过java反射进行匹配
+>  3.通过注解或者其它方式进行自定义的序列化和反序列化程序。
+
+#### 转java对象
+
+##### 1.Read Object From JSON String
+
+```dart
+ObjectMapper objectMapper = new ObjectMapper();
+String carJson = "{ \"brand\" : \"Mercedes\", \"doors\" : 5 }";
+Car car = objectMapper.readValue(carJson, Car.class);
+```
+
+##### 2.Read Object From JSON Reader
+
+```dart
+ObjectMapper objectMapper = new ObjectMapper();
+String carJson =  "{ \"brand\" : \"Mercedes\", \"doors\" : 4 }";
+Reader reader = new StringReader(carJson);
+Car car = objectMapper.readValue(reader, Car.class);
+```
+
+##### 3.Read Object From JSON File
+
+```java
+ObjectMapper objectMapper = new ObjectMapper();
+File file = new File("data/car.json");
+Car car = objectMapper.readValue(file, Car.class);
+```
+
+##### 4.Read Object From JSON via URL
+
+```java
+ObjectMapper objectMapper = new ObjectMapper();
+URL url = new URL("file:data/car.json");
+Car car = objectMapper.readValue(url, Car.class);
+```
+
+本例使用的是文件URL，也可使用一个HTTP URL（如：`http://jenkov.com/some-data.json` ).
+
+##### 5.Read Object From JSON InputStream
+
+```java
+ObjectMapper objectMapper = new ObjectMapper();
+InputStream input = new FileInputStream("data/car.json");
+Car car = objectMapper.readValue(input, Car.class);
+```
+
+##### 6.Read Object From JSON Byte Array
+
+```java
+ObjectMapper objectMapper = new ObjectMapper();
+String carJson =  "{ \"brand\" : \"Mercedes\", \"doors\" : 5 }";
+byte[] bytes = carJson.getBytes("UTF-8");
+Car car = objectMapper.readValue(bytes, Car.class);
+```
+
+##### 7.Read Object Array From JSON Array String
+
+```java
+String jsonArray = "[{\"brand\":\"ford\"}, {\"brand\":\"Fiat\"}]";
+ObjectMapper objectMapper = new ObjectMapper();
+Car[] cars2 = objectMapper.readValue(jsonArray, Car[].class);
+```
+
+##### 8。Read Object List From JSON Array String
+
+```java
+String jsonArray = "[{\"brand\":\"ford\"}, {\"brand\":\"Fiat\"}]";
+ObjectMapper objectMapper = new ObjectMapper();
+List<Car> cars1 = objectMapper.readValue(jsonArray, new TypeReference<List<Car>>(){});
+```
+
+##### 9.Read Map from JSON String
+
+```java
+String jsonObject = "{\"brand\":\"ford\", \"doors\":5}";
+ObjectMapper objectMapper = new ObjectMapper();
+Map<String, Object> jsonMap = objectMapper.readValue(jsonObject,
+    new TypeReference<Map<String,Object>>(){});
+```
+
+#### 转Json
+
+> - writeValue()
+> - writeValueAsString()
+> - writeValueAsBytes()
+
+```dart
+ObjectMapper objectMapper = new ObjectMapper();
+Car car = new Car();
+car.brand = "BMW";
+car.doors = 4;
+//写到文件中
+objectMapper.writeValue( new FileOutputStream("data/output-2.json"), car);
+//写到字符串中
+String json = objectMapper.writeValueAsString(car);
+```
+
+#### JsonNode
+
+##### json->JosonNode
+
+```java
+String json = "{ \"f1\" : \"v1\" } ";
+
+ObjectMapper objectMapper = new ObjectMapper();
+
+JsonNode jsonNode = objectMapper.readTree(json);
+
+System.out.println(jsonNode.get("f1").asText());
+```
+
+实际项目中ObjectMapper不应每次都创建，比如从spring容器中注入。
+
+##### JsonNode->java对象
+
+```java
+ObjectMapper objectMapper = new ObjectMapper();
+
+JsonNode jsonNode = readJsonIntoJsonNode();
+
+String json = objectMapper.writeValueAsString(jsonNode);
+```
+
+jsonNode常用方法：
+
+- get
+- path
+
+区别：两者的区别在于如果要读取的key在Json串中不存在时，get方法会null，而path会返回MissingNode实例对象，在链路方法情况下保证不会抛出异常。
+
+```java
+{
+    "field1" : "value1",
+    "field2" : 999
+}
+JsonNode field1 = jsonNode.get("field1");
+JsonNode field2 = jsonNode.get("field2");
+```
+
+- at
+
+```java
+{
+  "identification" :  {
+        "name" : "James",
+        "ssn: "ABC123552"
+    }
+}
+JsonNode nameNode = jsonNode.at("/identification/name");
+```
+
+注意at方法的参数：字符串"/identification/name"，这是json路径表达式。路径表达式指定了完整的从JsonNode的根到要访问字段的路径，与文件系统的路径很相似。但需要提醒的是必须以/开头。
+
+​	转为int String Long double
+
+```jav
+String f2Str = jsonNode.get("f2").asText();
+double f2Dbl = jsonNode.get("f2").asDouble();
+int    f2Int = jsonNode.get("f2").asInt();
+long   f2Lng = jsonNode.get("f2").asLong();
+```
+
+- fileName
+
+```java
+//jsonNode的fieldNames方法是获取jsonNode的所有的key值
+Iterator<String> keys = jsonNode.fieldNames();  
+  while(keys.hasNext()){  
+     String key = keys.next();  
+     System.out.println("key键是:"+key);  
+}
+```
+
+- findValue
+- findPath
+
+区别：resultValue和resultPath的区别在于，如果没有匹配到任何key值为性别，resultValue为null，resultPath为空JsonNode，第一种的区别不是很清楚。
+
+```java
+
+JsonNode resultValue = jsonNode.findValue("username");  
+JsonNode resultPath = jsonNode.findPath("username"); 
+```
+
+- elements
+
+```java
+//如果是一个JsonNode数组，使用jsonNode.elements();读取数组中每个node， 如果不是JsonNode数组，使用jsonNode.elements();返回jsonNode的values
+Iterator<JsonNode> elements = jsonNode.elements();  
+ while(elements.hasNext()){  
+     JsonNode node = elements.next();  
+     System.out.println(node.toString());  
+ }
+
+```
+
+- findParement
+
+```java
+//取出所有key值为number的JsonNode的List
+List<JsonNode> findKeys = jsonNode.findParents("number");  
+         for (JsonNode result:findKeys){  
+            System.err.println(result.toString());  
+ }
+```
+
+- findValue
+
+```java
+//取出所有key值为number对应的value(如果value中包含子jsonNode并且子jsonNode的key值也为number，是无法捕获到并加入list的)
+List<JsonNode> findValues = jsonNode.findValues("number");  
+         for(JsonNode value: findValues){  
+            System.out.println( value.toString());  
+  }
+```
+
+- fields
+
+```java
+//遍历某个JsonNode的key和value(value可能是字符串也可能是子jsonNode，但如果value是jsonNode数组的话，是无法读取的)
+Iterator<Map.Entry<String,JsonNode>> jsonNodes = jsonNode.fields();  
+         while (jsonNodes.hasNext()) {  
+            Map.Entry<String, JsonNode> node = jsonNodes.next();  
+              System.err.println("遍历获取key:"+node.getKey());  
+              System.err.println("遍历获取值:"+node.getValue().toString());
+}
+```
+
+##### 处理复杂结构json例子：
+
+```json
+{
+  "pageCount" : 1.0,
+  "data" : [ {
+    "regionalCode" : "09",
+    "zh_regionalName" : "上海",
+    "zh_name" : "综合业务"
+  }, {
+    "regionalCode" : "09",
+    "zh_regionalName" : "上海",
+    "zh_name" : "设计中心"
+  }],
+  "pageSize" : 3000,
+  "totalCount" : 2,
+  "currentPage" : 1
+}
+```
+
+```java
+JsonNode jsonNode = objectMapper.readTree(res);
+JsonNode responseData = res.get("data");
+JsonNode errorMessage = res.get("total"); 
+Long totalres.get("total").asLong();
+ObjectReader objectReader = objectMapper.reader(new TypeReference<List<CostCenterDto>>() {});
+List<CostCenterDto> list=objectReader.readValue(responseData);
+```
+
+#### 参考：
+
+https://blog.csdn.net/neweastsun/article/details/100669516
+
+https://www.jianshu.com/p/67b6da565f81
+
+https://blog.csdn.net/mst1010/article/details/78589059
 
 ## 数据库
 
