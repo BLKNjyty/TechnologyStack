@@ -1,5 +1,3 @@
-
-
 ## java
 
 ### 1.Stream
@@ -107,17 +105,46 @@ List<ADto> rules = elist.stream().map(e -> convertA(e)
 
 `Stream<T> peek(Consumer<? super T> action)`
 
-```java
-Stream.of("one", "two", "three","four").peek(u -> u.toUpperCase())
-                .forEach(System.out::println);
-//输出：one  two  three   four
-```
-
 > map和peek的区别
 
-Consumer是没有返回值的，它只是对Stream中的元素进行某些操作，但是操作之后的数据并不返回到Stream中，所以Stream中的元素还是原来的元素。
+首先看定义
 
-而Function是有返回值的，这意味着对于Stream的元素的所有操作都会作为新的结果返回到Stream中。
+>  Stream<T> peek(Consumer<? super T> action);
+>
+> peek方法接收一个Consumer的入参。了解λ表达式的应该明白 Consumer的实现类 应该只有一个方法，该方法返回类型为void如:Consumer<Integer> c =  i -> System.out.println("hello" + i);
+
+> map方法的入参为 Function。<R> Stream<R> map(Function<? super T, ? extends R> mapper);
+>
+> Function 的 λ表达式 可以这样写Function<Integer,String> f = x -> {return  "hello" + i;};
+
+map函数对Stream中元素执行的是映射操作，会以新的元素(map的结果)填充新的Stream，严格的讲map不是修改原来的元素。peek只能消费Stream中的元素，是否可以更该Stream中的元素，取决于Stream中的元素是否是不可变对象。如果是不可变对象，则不可修改Stream中的元素；如果是可变对象，则可以修改对象的值，但是无法修改对象的引用.
+
+不可变对象:
+
+```java
+List<String> list = Stream.of("one", "two", "three", "four")
+        .filter(e -> e.length() > 3)
+        .peek(s -> {
+            s = s + "-" + s;
+            System.out.println(s);
+        })
+        .map(String::toUpperCase)
+        .peek(e -> System.out.println("Mapped value: " + e))
+        .collect(Collectors.toList());
+System.out.println(list);
+```
+
+结果:
+
+```
+three-three
+Mapped value: THREE
+four-four
+Mapped value: FOUR
+[THREE, FOUR]
+```
+
+可变对象:
 
 ```java
 //peek常用案例
@@ -3374,6 +3401,166 @@ https://www.jianshu.com/p/67b6da565f81
 
 https://blog.csdn.net/mst1010/article/details/78589059
 
+### 21.ThreadLocal
+
+#### 1.为什么再数据库连接池中使用ThreadLocal
+
+- 保证同一个请求下的CRUD操作使用的是同一个链接
+
+> pool.getConnection()，都是先从threadlocal里面拿的，如果threadlocal里面有，则用，保证线程里的多个dao操作，用的是同一个connection，以保证事务。如果新线程，则将新的connection放在threadlocal里，再get给到线程。
+
+#### 2.ThreadLocal的实现
+
+##### 使用：
+
+```java
+//简单使用
+public class ThreadLocalTest {
+
+    static ThreadLocal<String> localVar = new ThreadLocal<>();
+
+    static void print(String str) {
+        //打印当前线程中本地内存中本地变量的值
+        System.out.println(str + " :" + localVar.get());
+        //清除本地内存中的本地变量
+        localVar.remove();
+    }
+
+    public static void main(String[] args) {
+        Thread t1  = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                //设置线程1中本地变量的值
+                localVar.set("localVar1");
+                //调用打印方法
+                print("thread1");
+                //打印本地变量
+                System.out.println("after remove : " + localVar.get());
+            }
+        });
+
+        Thread t2  = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                //设置线程1中本地变量的值
+                localVar.set("localVar2");
+                //调用打印方法
+                print("thread2");
+                //打印本地变量
+                System.out.println("after remove : " + localVar.get());
+            }
+        });
+
+        t1.start();
+        t2.start();
+    }
+}
+```
+
+##### 1.set源码：
+
+```
+//set源码
+public void set(T value) {
+    //(1)获取当前线程（调用者线程）
+    Thread t = Thread.currentThread();
+    //(2)以当前线程作为key值，去查找对应的线程变量，找到对应的map
+    ThreadLocalMap map = getMap(t);
+    //(3)如果map不为null，就直接添加本地变量，key为当前定义的ThreadLocal变量的this引用，值为添加的本地变量值
+    if (map != null)
+        map.set(this, value);
+    //(4)如果map为null，说明首次添加，需要首先创建出对应的map
+    else
+        createMap(t, value);
+}
+```
+
+　在上面的代码中，(2)处调用getMap方法获得当前线程对应的threadLocals(参照上面的图示和文字说明)，该方法代码如下
+
+```java
+ThreadLocalMap getMap(Thread t) {
+    return t.threadLocals; //获取线程自己的变量threadLocals，并绑定到当前调用线程的成员变量threadLocals上
+}
+```
+
+如果调用getMap方法返回值不为null，就直接将value值设置到threadLocals中（key为当前线程引用，值为本地变量）；如果getMap方法返回null说明是第一次调用set方法（前面说到过，threadLocals默认值为null，只有调用set方法的时候才会创建map），这个时候就需要调用createMap方法创建threadLocals，该方法如下所示
+
+```java
+ void createMap(Thread t, T firstValue) {
+     t.threadLocals = new ThreadLocalMap(this, firstValue);
+ }
+```
+
+createMap方法不仅创建了threadLocals，同时也将要添加的本地变量值添加到了threadLocals中。
+
+##### 2.get源码
+
+在get方法的实现中，首先获取当前调用者线程，如果当前线程的threadLocals不为null，就直接返回当前线程绑定的本地变量值，否则执行setInitialValue方法初始化threadLocals变量。在setInitialValue方法中，类似于set方法的实现，都是判断当前线程的threadLocals变量是否为null，是则添加本地变量（这个时候由于是初始化，所以添加的值为null），否则创建threadLocals变量，同样添加的值为null。
+
+```java
+public T get() {
+    //(1)获取当前线程
+    Thread t = Thread.currentThread();
+    //(2)获取当前线程的threadLocals变量
+    ThreadLocalMap map = getMap(t);
+    //(3)如果threadLocals变量不为null，就可以在map中查找到本地变量的值
+    if (map != null) {
+        ThreadLocalMap.Entry e = map.getEntry(this);
+        if (e != null) {
+            @SuppressWarnings("unchecked")
+            T result = (T)e.value;
+            return result;
+        }
+    }
+    //(4)执行到此处，threadLocals为null，调用该更改初始化当前线程的threadLocals变量
+    return setInitialValue();
+}
+
+private T setInitialValue() {
+    //protected T initialValue() {return null;}
+    T value = initialValue();
+    //获取当前线程
+    Thread t = Thread.currentThread();
+    //以当前线程作为key值，去查找对应的线程变量，找到对应的map
+    ThreadLocalMap map = getMap(t);
+    //如果map不为null，就直接添加本地变量，key为当前线程，值为添加的本地变量值
+    if (map != null)
+        map.set(this, value);
+    //如果map为null，说明首次添加，需要首先创建出对应的map
+    else
+        createMap(t, value);
+    return value;
+}
+```
+
+##### 　3、remove方法的实现
+
+remove方法判断该当前线程对应的threadLocals变量是否为null，不为null就直接删除当前线程中指定的threadLocals变量
+
+```java
+public void remove() {
+    //获取当前线程绑定的threadLocals
+     ThreadLocalMap m = getMap(Thread.currentThread());
+     //如果map不为null，就移除当前线程中指定ThreadLocal实例的本地变量
+     if (m != null)
+         m.remove(this);
+ }
+```
+
+### 2.内存泄漏问题
+
+　首先我们先看看ThreadLocalMap的类图，在前面的介绍中，我们知道ThreadLocal只是一个工具类，他为用户提供get、set、remove接口操作实际存放本地变量的threadLocals（调用线程的成员变量），也知道threadLocals是一个ThreadLocalMap类型的变量，下面我们来看看ThreadLocalMap这个类。在此之前，我们回忆一下Java中的四种引用类型，相关GC只是参考前面系列的文章([JVM相关](https://www.cnblogs.com/fsmly/category/1387642.html))
+
+①强引用：Java中默认的引用类型，一个对象如果具有强引用那么只要这种引用还存在就不会被GC。
+
+②软引用：简言之，如果一个对象具有弱引用，在JVM发生OOM之前（即内存充足够使用），是不会GC这个对象的；只有到JVM内存不足的时候才会GC掉这个对象。软引用和一个引用队列联合使用，如果软引用所引用的对象被回收之后，该引用就会加入到与之关联的引用队列中
+
+③弱引用（这里讨论ThreadLocalMap中的Entry类的重点）：如果一个对象只具有弱引用，那么这个对象就会被垃圾回收器GC掉(被弱引用所引用的对象只能生存到下一次GC之前，当发生GC时候，无论当前内存是否足够，弱引用所引用的对象都会被回收掉)。弱引用也是和一个引用队列联合使用，如果弱引用的对象被垃圾回收期回收掉，JVM会将这个引用加入到与之关联的引用队列中。若引用的对象可以通过弱引用的get方法得到，当引用的对象呗回收掉之后，再调用get方法就会返回null
+
+④虚引用：虚引用是所有引用中最弱的一种引用，其存在就是为了将关联虚引用的对象在被GC掉之后收到一个通知。（不能通过get方法获得其指向的对象）
+
+总结：THreadLocalMap中的Entry的key使用的是ThreadLocal对象的弱引用，在没有其他地方对ThreadLoca依赖，ThreadLocalMap中的ThreadLocal对象就会被回收掉，但是对应的不会被回收，这个时候Map中就可能存在key为null但是value不为null的项，这需要实际的时候使用完毕及时调用remove方法避免内存泄漏。
+
 ## 数据库
 
 ### 1.mysql的联合索引
@@ -6302,3 +6489,314 @@ public static void main(String[] args) {
 }
 ```
 
+## Redis
+
+参考微信公众号：码哥字节。
+
+### 1.redis解决商品秒杀库存超卖问题
+
+```
+在众多抢购活动中，在有限的商品数量的限制下如何保证抢购到商品的用户数不能大于商品数量，也就是不能出现超卖的问题；还有就是抢购时会出现大量用户的访问，如何提高用户体验效果也是一个问题，也就是要解决秒杀系统的性能问题。
+
+本文主要介绍基于redis 实现商品秒杀功能。先来跟大家讲下大概思路。总体思路就是要减少对数据库的访问，尽可能将数据缓存到Redis缓存中，从缓存中获取数据。
+
+- 在系统初始化时，将商品的库存数量加载到Redis缓存中；
+- 接收到秒杀请求时，在Redis中进行预减库存，当Redis中的库存不足时，直接返回秒杀失败，否则继续进行第3步；
+- 将请求放入异步队列中，返回正在排队中；
+- 服务端异步队列将请求出队，出队成功的请求可以生成秒杀订单，减少数据库库存，返回秒杀订单详情。
+- 当后台订单创建成功之后可以通过websocket向用户发送一个秒杀成功通知。前端以此来判断是否秒杀成功，秒杀成功则进入秒杀订单详情，否则秒杀失败。
+```
+
+### 2.Redis为什么快？
+
+有多快：redis根据官方文档所说，Redis 的 QPS 可以达到约 100000（每秒请求数）。
+
+![redisQPS](images\redisQPS.jpg)
+
+1.基于内存实现：Redis 是基于内存的数据库，跟磁盘数据库相比，完全吊打磁盘的速度。不论读写操作都是在内存上完成的，我们分别对比下内存操作与磁盘操作的差异。
+
+2.高效的数据结构：Redis 一共有 5 种数据类型，`String、List、Hash、Set、SortedSet`。不同的数据类型底层使用了一种或者多种数据结构来支撑，目的就是为了追求更快的速度。
+
+3.单线程模型
+
+**注意**：Redis 的单线程指的是 **单线程指的是 Redis 键值对读写指令的执行是单线程。**对于 Redis 的持久化、集群数据同步、异步删除等都是其他线程执行。
+
+最后说明一下，Redis的瓶颈存在于两个方面：内存和网络带宽。
+
+### 3.Redis数据类型和其底层的数据结构
+
+![redis数据类型底层结构](images\redis数据类型底层结构.jpg)
+
+- SDS动态字符串
+
+![SDS动态字符串](images\SDS动态字符串.jpg)
+
+> 1. SDS 中 len 保存这字符串的长度，O(1) 时间复杂度查询字符串长度信息。
+> 2. 空间预分配：SDS 被修改后，程序不仅会为 SDS 分配所需要的必须空间，还会分配额外的未使用空间。
+> 3. 惰性空间释放：当对 SDS 进行缩短操作时，程序并不会回收多余的内存空间，而是使用 free 字段将这些字节数量记录下来不释放，后面如果需要 append 操作，则直接使用 free 中未使用的空间，减少了内存的分配。
+
+- zipList压缩列表
+
+ ![压缩列表](images\压缩列表.jpg)
+
+> 压缩列表是 List 、hash、 sorted Set 三种数据类型底层实现之一。
+>
+> 当一个列表只有少量数据的时候，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么 Redis 就会使用压缩列表来做列表键的底层实现。
+
+- quickList
+
+![quickList](images\quickList.png)
+
+>后续版本对列表数据结构进行了改造，使用 quicklist 代替了 ziplist 和 linkedlist。quicklist 是 ziplist 和 linkedlist 的混合体，它将 linkedlist 按段切分，每一段使用 ziplist 来紧凑存储，多个 ziplist 之间使用双向指针串接起来。
+
+- skipList跳跃表
+
+> sorted set 类型的排序功能便是通过「跳跃列表」数据结构来实现。
+>
+> 跳跃表（skiplist）是一种有序数据结构，它通过在每个节点中维持多个指向其他节点的指针，从而达到快速访问节点的目的。
+>
+> 跳表在链表的基础上，增加了多层级索引，通过索引位置的几个跳转，实现数据的快速定位，如下图所示：
+
+
+
+![跳表](images\跳表.jpg)
+
+- 整数数组
+
+  >  当一个集合只包含整数值元素，并且这个集合的元素数量不多时，Redis 就会使用整数集合作为集合键的底层实现，节省内存。
+
+### 4.为什么Redis使用单线程模型而不是用多线程呢？
+
+首先，如果使用多线程的话必然会涉及到切换上下文，这种切换是十分耗费时间的。同时，引入多线程，对共享资源的并发读写都要进行一些保护，增加了实现的复杂度。
+
+其次，Redis是基于内存的数据库(相比较于传统的基于磁盘的数据库，IO时CPU会空闲，基于内存的数据库CPU会全心全意的为其服务，所以内存会成为其发展的瓶颈，CPU不会)，CPU不会成为瓶颈。同时单线程相对于多线程又是很容易实现的，所以采用单线程模型。
+
+> 单线程的好处：
+>
+> 1. 不会因为线程创建导致的性能消耗；
+> 2. 避免上下文切换引起的 CPU 消耗，没有多线程切换的开销；
+> 3. 避免了线程之间的竞争问题，比如添加锁、释放锁、死锁等，不需要考虑各种锁问题。
+> 4. 代码更清晰，处理逻辑简单。
+
+### 5.IO多路服用模型？
+
+Redis 采用 I/O 多路复用技术，并发处理连接。采用了 epoll + 自己实现的简单的事件框架。
+
+epoll 中的读、写、关闭、连接都转化成了事件，然后利用 epoll 的多路复用特性，绝不在 IO 上浪费一点时间。
+
+![高性能多路复用](images\高性能多路复用.jpg)
+
+Redis 线程不会阻塞在某一个特定的监听或已连接套接字上，也就是说，不会阻塞在某一个特定的客户端请求处理上。正因为此，Redis 可以同时和多个客户端连接并处理请求，从而提升并发性。
+
+### 6.Redis全局hash字典？
+
+Redis 整体就是一个 哈希表来保存所有的键值对，无论数据类型是 5 种的任意一种。哈希表，本质就是一个数组，每个元素被叫做哈希桶，不管什么数据类型，每个桶里面的 entry 保存着实际具体值的指针。
+
+![全局hash表](images\全局hash表.jpg)
+
+而哈希表的时间复杂度是 O(1)，只需要计算每个键的哈希值，便知道对应的哈希桶位置，定位桶里面的 entry 找到对应数据，这个也是 Redis 快的原因之一。
+
+Redis 使用对象（redisObject）来表示数据库中的键值，当我们在 Redis 中创建一个键值对时，至少创建两个对象，一个对象是用做键值对的键对象，另一个是键值对的值对象。
+
+也就是每个 entry 保存着 「键值对」的 redisObject 对象，通过 redisObject 的指针找到对应数据。
+
+### 7.hash冲突怎么办？
+
+Redis 通过**链式哈希**解决冲突：**也就是同一个 桶里面的元素使用链表保存**。但是当链表过长就会导致查找性能变差可能，所以 Redis 为了追求快，使用了两个全局哈希表。用于 rehash 操作，增加现有的哈希桶数量，减少哈希冲突。
+
+开始默认使用 「hash 表 1 」保存键值对数据，「hash 表 2」 此刻没有分配空间。当数据越来越多触发 rehash 操作，则执行以下操作：
+
+1. 给 「hash 表 2 」分配更大的空间；
+2. 将 「hash 表 1 」的数据重新映射拷贝到 「hash 表 2」 中；
+3. 释放 「hash 表 1」 的空间。
+
+**值得注意的是，将 hash 表 1 的数据重新映射到 hash 表 2 的过程中并不是一次性的，这样会造成 Redis 阻塞，无法提供服务。**
+
+而是采用了**渐进式 rehash**，每次处理客户端请求的时候，先从「 hash 表 1」 中第一个索引开始，将这个位置的 所有数据拷贝到 「hash 表 2」 中，就这样将 rehash 分散到多次请求过程中，避免耗时阻塞。
+
+### 8.Redis如何实现持久化？down机了如何恢复数据?
+
+RDB和AOF两种持久化机制。
+
+#### RDB：
+
+在 Redis 执行「写」指令过程中，内存数据会一直变化。所谓的内存快照，指的就是 Redis 内存中的数据在某一刻的状态数据。
+
+好比时间定格在某一刻，当我们拍照的，通过照片就能把某一刻的瞬间画面完全记录下来。
+
+Redis 跟这个类似，就是把某一刻的数据以文件的形式拍下来，写到磁盘上。这个快照文件叫做 **RDB 文件，RDB 就是 Redis DataBase 的缩写。**
+
+![RDB](images\RDB.jpg)
+
+> 生成RDB的时候Redis可以同时处理写请求吗？
+>
+> 可以的，Redis 使用操作系统的多进程**写时复制技术 COW(Copy On Write)** 来实现快照持久化，保证数据一致性。
+>
+> Redis 在持久化时会调用 glibc 的函数`fork`产生一个子进程，快照持久化完全交给子进程来处理，父进程继续处理客户端请求。
+>
+> 当主线程执行写指令修改数据的时候，这个数据就会复制一份副本， `bgsave` 子进程读取这个副本数据写到 RDB 文件。
+>
+> 这既保证了快照的完整性，也允许主线程同时对数据进行修改，避免了对正常业务的影响。
+
+![写时复制](images\写时复制.jpg)
+
+> RDB的弊端？
+>
+> Redis 的数据持久化使用了「RDB 数据快照」的方式来实现宕机快速恢复。但是 过于频繁的执行全量数据快照，有两个严重性能开销：
+>
+> 1. 频繁生成 RDB 文件写入磁盘，磁盘压力过大。会出现上一个 RDB 还未执行完，下一个又开始生成，陷入死循环。
+> 2. fork 出 bgsave 子进程会阻塞主线程，主线程的内存越大，阻塞时间越长。
+
+#### AOF：
+
+AOF 日志记录了自 Redis 实例创建以来所有的修改性指令序列，那么就可以通过对一个空的 Redis 实例顺序执行所有的指令，也就是「重放」，来恢复 Redis 当前实例的内存数据结构的状态。
+
+Redis 提供的 AOF 配置项`appendfsync`写回策略直接决定 AOF 持久化功能的效率和安全性。
+
+- **always**：同步写回，写指令执行完毕立马将 `aof_buf`缓冲区中的内容刷写到 AOF 文件。
+- **everysec**：每秒写回，写指令执行完，日志只会写到 AOF 文件缓冲区，每隔一秒就把缓冲区内容同步到磁盘。
+- **no：** 操作系统控制，写执行执行完毕，把日志写到 AOF 文件内存缓冲区，由操作系统决定何时刷写到磁盘。
+
+没有两全其美的策略，我们需要在性能和可靠性上做一个取舍。
+
+#### 两者比较？
+
+AOF 写前日志，记录的是每个「写」指令操作。不会像 RDB 全量快照导致性能损耗，但是执行速度没有 RDB 快，同时日志文件过大也会造成性能问题。
+
+所以，Redis 设计了一个杀手锏「AOF 重写机制」，Redis 提供了`bgrewriteaof`指令用于对 AOF 日志进行瘦身。
+
+![AOF重写](images\AOF重写.jpg)
+
+#### 混合持久化？
+
+重启 Redis 时，我们很少使用 rdb 来恢复内存状态，因为会丢失大量数据。我们通常使用 AOF 日志重放，但是重放 AOF 日志性能相对 rdb 来说要慢很多，这样在 Redis 实例很大的情况下，启动需要花费很长的时间。
+
+Redis 4.0 为了解决这个问题，带来了一个新的持久化选项——**混合持久化**。将 rdb 文件的内容和增量的 AOF 日志文件存在一起。这里的 AOF 日志不再是全量的日志，而是**自持久化开始到持久化结束的这段时间发生的增量 AOF 日志**，通常这部分 AOF 日志很小。
+
+于是**在 Redis 重启的时候，可以先加载 rdb 的内容，然后再重放增量 AOF 日志就可以完全替代之前的 AOF 全量文件重放，重启效率因此大幅得到提升**。
+
+### 9.Redis主从架构的数据同步？
+
+Redis 提供了主从模式，通过主从复制，将数据冗余一份复制到其他 Redis 服务器。
+
+> 主从模式如何保证副本数据的一致性？
+>
+> - 读操作：主、从库都可以执行；
+> - 写操作：主库先执行，之后将写操作同步到从库；
+
+![Redis读写分离](D:\Users\yjin5\ibu-doc\knowsCollection\images\Redis读写分离.jpg)
+
+> 主从复制的其他作用？
+>
+> 1. 故障恢复：当主节点宕机，其他节点依然可以提供服务；
+> 2. 负载均衡：Master 节点提供写服务，Slave 节点提供读服务，分担压力；
+> 3. 高可用基石：是哨兵和 cluster 实施的基础，是高可用的基石。
+
+> 主从复制的实现？
+>
+> 同步分为三种情况：
+>
+> 1. 第一次主从库全量复制；
+> 2. 主从正常运行期间的同步；
+> 3. 主从库间网络断开重连同步。
+
+> 全量同步？
+>
+> 1. 建立连接：**从库会和主库建立连接，从库执行 replicaof 并发送 psync 命令并告诉主库即将进行同步，主库确认回复后，主从库间就开始同步了**。
+> 2. 主库同步数据给从库：master 执行 `bgsave`命令生成 RDB 文件，并将文件发送给从库，同时**主库**为每一个 slave 开辟一块 replication buffer 缓冲区记录从生成 RDB 文件开始收到的所有写命令。从库保存 RDB 并清空数据库再加载 RDB 数据到内存中。
+> 3. 发送 RDB 之后接收到的新写命令到从库：在生成 RDB 文件之后的写操作并没有记录到刚刚的 RDB 文件中，为了保证主从库数据的一致性，所以主库会在内存中使用一个叫 replication buffer 记录 RDB 文件生成后的所有写操作。并将里面的数据发送到 slave。
+
+![Redis的全量同步](D:\Users\yjin5\ibu-doc\knowsCollection\images\Redis的全量同步.jpg)
+
+> 网络断开重新连接同步？
+>
+> 增量复制：**用于网络中断等情况后的复制，只将中断期间主节点执行的写命令发送给从节点，与全量复制相比更加高效**。
+>
+> 断开重连增量复制的实现奥秘就是 `repl_backlog_buffer` 缓冲区，不管在什么时候 master 都会将写指令操作记录在 `repl_backlog_buffer` 中，因为内存有限， `repl_backlog_buffer` 是一个定长的环形数组，**如果数组内容满了，就会从头开始覆盖前面的内容**。
+>
+> master 使用 `master_repl_offset`记录自己写到的位置偏移量，slave 则使用`slave_repl_offset`记录已经读取到的偏移量。
+>
+> 当主从断开重连后，slave 会先发送 psync 命令给 master，同时将自己的 `runID`，`slave_repl_offset`发送给 master。
+>
+> master 只需要把 `master_repl_offset`与 `slave_repl_offset`之间的命令同步给从库即可。
+
+![增量同步原理](images\增量同步原理.jpg)
+
+![增量复制流程](images\增量复制流程.jpg)
+
+> 主从正常连接情况下的同步？
+> 当主从库完成了全量复制，它们之间就会一直维护一个网络连接，主库会通过这个连接将后续陆续收到的命令操作再同步给从库，这个过程也称为基于长连接的命令传播，使用长连接的目的就是避免频繁建立连接导致的开销。
+
+### 10.哨兵模式？
+
+兵是 Redis 的一种运行模式，它专注于**对 Redis 实例（主节点、从节点）运行状态的监控，并能够在主节点发生故障时通过一系列的机制实现选主及主从切换，实现故障转移，确保整个 Redis 系统的可用性**。
+
+Redis 哨兵具备的能力有如下几个：
+
+- **监控**：持续监控 master 、slave 是否处于预期工作状态。
+- **自动切换主库**：当 Master 运行故障，哨兵启动自动故障恢复流程：从 slave 中选择一台作为新 master。
+- **通知**：让 slave 执行 replicaof ，与新的 master 同步；并且通知客户端与新 master 建立连接。
+
+> 哨兵之间是如何知道彼此的？哨兵与 master 建立通信，利用 master 提供发布/订阅机制发布自己的信息，比如身高体重、是否单身、IP、端口……
+>
+> master 有一个 `__sentinel__:hello` 的专用通道，用于哨兵之间发布和订阅消息。**这就好比是 `__sentinel__:hello` 微信群，哨兵利用 master 建立的微信群发布自己的消息，同时关注其他哨兵发布的消息**。
+
+> 哨兵如何知道slave？
+>
+> 关键还是利用 master 来实现，哨兵向 master 发送 `INFO` 命令， master 掌门自然是知道自己门下所有的 salve 小弟的。所以 master 接收到命令后，便将 slave 列表告诉哨兵。
+>
+> 哨兵根据 master 响应的 slave 名单信息与每一个 salve 建立连接，并且根据这个连接持续监控哨兵。
+
+### 11.Cluster原理？
+
+> 除了哨兵模式外还有啥高可用的手段？
+>
+> 有 Cluster 集群实现高可用，哨兵集群监控的 Redis 集群是主从架构，无法横向拓展。**使用 Redis Cluster 集群，主要解决了大数据量存储导致的各种慢问题，同时也便于横向拓展。**在面向百万、千万级别的用户规模时，横向扩展的 Redis 切片集群会是一个非常好的选择。
+
+> 什么是Cluster集群？
+>
+> Redis 集群是一种分布式数据库方案，集群通过分片（sharding）来进行数据管理（「分治思想」的一种实践），并提供复制和故障转移功能。
+>
+> 将数据划分为 16384 的 slots，每个节点负责一部分槽位。槽位的信息存储于每个节点中。
+>
+> 它是去中心化的，如图所示，该集群由三个 Redis 节点组成，每个节点负责整个集群的一部分数据，每个节点负责的数据多少可能不一样。
+>
+> 三个节点相互连接组成一个对等的集群，它们之间通过 `Gossip`协议相互交互集群信息，最后每个节点都保存着其他节点的 slots 分配情况。
+
+![cluster集群](images\cluster集群.jpg)
+
+> 哈希槽又是如何映射到 Redis 实例上呢？
+>
+> 1. 根据键值对的 key，使用 CRC16 算法，计算出一个 16 bit 的值；
+> 2. 将 16 bit 的值对 16384 执行取模，得到 0 ～ 16383 的数表示 key 对应的哈希槽。
+> 3. 根据该槽信息定位到对应的实例。
+
+![数据与Slot与实例的映射](images\数据与Slot与实例的映射.jpg)
+
+> Cluster 如何实现故障转移？
+>
+> Redis 集群节点采用 `Gossip` 协议来广播自己的状态以及自己对整个集群认知的改变。比如一个节点发现某个节点失联了 (PFail)，它会将这条信息向整个集群广播，其它节点也就可以收到这点失联信息。
+>
+> 如果一个节点收到了某个节点失联的数量 (PFail Count) 已经达到了集群的大多数，就可以标记该节点为确定下线状态 (Fail)，然后向整个集群广播，强迫其它节点也接收该节点已经下线的事实，并立即对该失联节点进行主从切换。
+
+> 客户端又怎么确定访问的数据分布在哪个实例上呢？
+>
+> Redis 实例会将自己的哈希槽信息通过 Gossip 协议发送给集群中其他的实例，实现了哈希槽分配信息的扩散。
+>
+> 这样，集群中的每个实例都有所有哈希槽与实例之间的映射关系信息。
+>
+> 当客户端连接任何一个实例，实例就将哈希槽与实例的映射关系响应给客户端，客户端就会将哈希槽与实例映射信息缓存在本地。
+>
+> 当客户端请求时，会计算出键所对应的哈希槽，再通过本地缓存的哈希槽实例映射信息定位到数据所在实例上，再将请求发送给对应的实例。
+
+![Redis客户端定位数据所在节点](images\Redis客户端定位数据所在节点.jpg)
+
+> Redis重定向机制？
+>
+> 哈希槽与实例之间的映射关系由于新增实例或者负载均衡重新分配导致改变了，**客户端将请求发送到实例上，这个实例没有相应的数据，该 Redis 实例会告诉客户端将请求发送到其他的实例上**。
+>
+> Redis 通过 MOVED 错误和 ASK 错误告诉客户端。
+>
+> **MOVED** 错误（负载均衡，数据已经迁移到其他实例上）：当客户端将一个键值对操作请求发送给某个实例，而这个键所在的槽并非由自己负责的时候，该实例会返回一个 MOVED 错误指引转向正在负责该槽的节点。
+>
+> **ASK**槽部分迁移未完成的情况下，如果需要访问的 key 所在 Slot 正在从 实例 1 迁移到 实例 2（如果 key 已经不在实例 1），实例 1 会返回客户端一条 ASK 报错信息：**客户端请求的 key 所在的哈希槽正在迁移到实例 2 上，你先给实例 2 发送一个 ASKING 命令，接着发发送操作命令**。
