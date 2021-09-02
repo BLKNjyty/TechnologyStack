@@ -8,7 +8,7 @@ Stream（流）是一个来自数据源的元素队列并支持聚合操作
 
 - 元素是特定类型的对象，形成一个队列。 Java中的Stream并不会存储元素，而是按需计算。
 - **数据源** 流的来源。 可以是集合，数组，I/O channel， 产生器generator 等---不可以是map！！
-- **聚合操作** 类似SQL语句一样的操作， 比如filter, map, reduce, find, match, sorted等。
+- **聚合操作** 类似SQL语句一样的操作， 比如filter, map, reduce, find, match, sorted等。l
 
 #### 接口继承关系图：
 
@@ -6525,9 +6525,15 @@ public static void main(String[] args) {
 
 ### 3.Redis数据类型和其底层的数据结构
 
+#### 3.1底层数据结构
+
+[详细请转到](https://www.cnblogs.com/hunternet/p/11306690.html)
+
 ![redis数据类型底层结构](images\redis数据类型底层结构.jpg)
 
 - SDS动态字符串
+
+在Redis数据库里，包含字符串值的键值对都是由SDS实现的(Redis中所有的键都是由字符串对象实现的即底层是由SDS实现，Redis中所有的值对象中包含的字符串对象底层也是由SDS实现
 
 ![SDS动态字符串](images\SDS动态字符串.jpg)
 
@@ -6535,13 +6541,34 @@ public static void main(String[] args) {
 > 2. 空间预分配：SDS 被修改后，程序不仅会为 SDS 分配所需要的必须空间，还会分配额外的未使用空间。
 > 3. 惰性空间释放：当对 SDS 进行缩短操作时，程序并不会回收多余的内存空间，而是使用 free 字段将这些字节数量记录下来不释放，后面如果需要 append 操作，则直接使用 free 中未使用的空间，减少了内存的分配。
 
+为什么不使用c字符串二用动态字符串？
+
+> 1.内存溢出问题：C字符串，如果程序员在字符串修改的时候如果忘记给字符串重新分配足够的空间，那么就会发生内存溢出，如s1和s2内存邻接，忘记给s1分配足够的内存空间, s1的数据就会溢出到s2的空间, 导致s2的内容被修改.
+>
+> 2.重新分配内存问题:在C字符串中，如果对字符串进行修改，那么我们就不得不面临内存重分配。因为C字符串是由一个N+1长度的数组组成，如果字符串的长度变长，我们就必须对数组进行扩容，否则会产生内存溢出。而如果字符串长度变短，我们就必须释放掉不再使用的空间，否则会发生内存泄漏。
+>
+> 其分配策略如下:
+>
+> - 如果修改后len长度将小于1M,这时分配给free的大小和len一样,例如修改过后为10字节, 那么给free也是10字节，buf实际长度变成了10+10+1 = 21byte
+> - 如果修改后len长度将大于等于1M,这时分配给free的长度为1M,例如修改过后为30M,那么给free是1M.buf实际长度变成了30M+1M+1byte
+>
+> 相反，惰性空间释放用于字符串缩短的操作。当字符串缩短是，程序并不是立即使用内存重分配来回收缩短出来的字节，而是使用free属性记录起来，并等待将来使用。
+
 - zipList压缩列表
 
  ![压缩列表](images\压缩列表.jpg)
 
 > 压缩列表是 List 、hash、 sorted Set 三种数据类型底层实现之一。
 >
+> 压缩列表(zip1ist)是列表和哈希的底层实现之一。
+>
+>   当一个列表只包含少量列表项,并且每个列表项要么就是小整数值,要么就是长度比较短的字符串,那么Redis就会使用压缩列表来做列表的底层实现。
+>
+>   当一个哈希只包含少量键值对,比且每个键值对的键和值要么就是小整数值,要么就是长度比较短的字符串,那么Redis就会使用压缩列表来做哈希的底层实现。
+>
 > 当一个列表只有少量数据的时候，并且每个列表项要么就是小整数值，要么就是长度比较短的字符串，那么 Redis 就会使用压缩列表来做列表键的底层实现。
+
+[原理](https://www.cnblogs.com/hunternet/p/11306690.html)：
 
 - quickList
 
@@ -6561,9 +6588,684 @@ public static void main(String[] args) {
 
 ![跳表](images\跳表.jpg)
 
+跳跃表（SkipList）这种数据结构使用空间换时间的策略，通过给链表建立多层索引来加快搜索效率，我们先介绍跳跃表的基本理论，再来看看 redis 中的实现情况。
+
 - 整数数组
 
   >  当一个集合只包含整数值元素，并且这个集合的元素数量不多时，Redis 就会使用整数集合作为集合键的底层实现，节省内存。
+
+#### 3.2基本数据类型
+
+五大基本数据类型和三大特殊类型。
+
+##### String
+
+```
+incr和decr：
+127.0.0.1:6379[3]> set views 0
+OK
+127.0.0.1:6379[3]> get views
+"0"
+127.0.0.1:6379[3]> incr views   #自增1  相应的decr是自减1
+(integer) 1
+127.0.0.1:6379[3]> get views        
+"1"
+127.0.0.1:6379> incrby views 10  #设置步长 自增10
+(integer) 11
+127.0.0.1:6379> get views
+"11"
+127.0.0.1:6379> decrby views 9
+(integer) 2
+127.0.0.1:6379> get views
+"2"
+```
+
+```
+range:
+127.0.0.1:6379> set key1 "hello,jinyu"
+OK
+127.0.0.1:6379> get key1
+"hello,jinyu"
+127.0.0.1:6379> getrange key1 0 2  #获取下标0-2，闭区间
+"hel"
+127.0.0.1:6379> getrange key1 0 -1  #获取全部字符串，和get key1一样
+"hello,jinyu"
+```
+
+```
+替换：
+127.0.0.1:6379> set key2 abcdefg
+OK
+127.0.0.1:6379> setrange key2 1 xx
+(integer) 7
+127.0.0.1:6379> get key2
+"axxdefg"
+```
+
+```
+setex和setnx
+127.0.0.1:6379> setex key3 30 "hello" #设置key3的值为hello，30秒后过期
+OK
+127.0.0.1:6379> ttl key3
+(integer) 22
+127.0.0.1:6379> get key3
+"hello"
+127.0.0.1:6379> setnx mykey "redis"  #mykey不存在，创建mykey
+(integer) 1
+127.0.0.1:6379> keys *
+1) "mykey"
+2) "key2"
+127.0.0.1:6379> setnx mykey "Mongdb"  #mykey存在，创建失败
+(integer) 0
+127.0.0.1:6379> keys *
+1) "mykey"
+2) "key2"
+```
+
+```
+批量设置mset和mget：
+127.0.0.1:6379> mset k1 v1 k2 v2 k3 v3   #同时设置多个值
+OK
+127.0.0.1:6379> keys *
+1) "k2"
+2) "k3"
+3) "k1"
+127.0.0.1:6379> mget k1 k3   #同时获取
+1) "v1"
+2) "v3"
+127.0.0.1:6379> msetnx k1 v1 k4 v4   #原子性操作，一起成功一起失败
+(integer) 0
+127.0.0.1:6379> get key4
+(nil)
+```
+
+```
+存储对象
+127.0.0.1:6379> mset user:1:name zhangsan user:1:age 2
+OK
+127.0.0.1:6379> mget user:1:name user:1:age
+1) "zhangsan"
+2) "2"
+```
+
+```
+getset命令：
+127.0.0.1:6379> getset db redis   #获取当前可以的值并且设置新的值
+(nil)
+127.0.0.1:6379> get db
+"redis"
+127.0.0.1:6379> getset db mongodb
+"redis"
+127.0.0.1:6379> get db
+"mongodb"
+```
+
+value不仅可以是string还可以是数字，应用常规计数：微博粉丝数等等
+
+##### List
+
+```
+push：
+127.0.0.1:6379> lpush list one  #将一个值或者多个值插入到列表的头部
+(integer) 1
+127.0.0.1:6379> lpush list two
+(integer) 2
+127.0.0.1:6379> lpush list three
+(integer) 3
+127.0.0.1:6379> lrange list 0 -1  #获取list的值
+1) "three"
+2) "two"
+3) "one"
+127.0.0.1:6379> lrange list 0 1   #通过区间获取具体的值
+1) "three"
+2) "two"
+
+127.0.0.1:6379> rpush list right  #rpush放到列表的尾部
+(integer) 4
+127.0.0.1:6379> lrange list 0 -1
+1) "three"
+2) "two"
+3) "one"
+4) "right"
+```
+
+```
+pop，index，llen：
+127.0.0.1:6379> lpop list  #移除列表的第一个元素
+"three"
+127.0.0.1:6379> rpop list  #移除list的最后一个元素
+"right"
+127.0.0.1:6379> lrange list 0 -1
+1) "two"
+2) "one"
+127.0.0.1:6379> lindex list 1
+"one"
+127.0.0.1:6379> llen list
+(integer) 2
+```
+
+```
+移除list集合中指定个数的value：
+127.0.0.1:6379> lpush list three
+(integer) 3
+127.0.0.1:6379> lpush list three
+(integer) 4
+127.0.0.1:6379> lrange list 0 -1
+1) "three"
+2) "three"
+3) "two"
+4) "one"
+127.0.0.1:6379> lrem list 1 one
+(integer) 1
+127.0.0.1:6379> lrange list 0 -1
+1) "three"
+2) "three"
+3) "two"
+127.0.0.1:6379> lrem list 1 three
+(integer) 1
+127.0.0.1:6379> lrange list 0 -1
+1) "three"
+2) "two"
+```
+
+```
+通过下标截取指定的长度：
+127.0.0.1:6379> lpush mylist hello
+(integer) 1
+127.0.0.1:6379> lpush mylist hello1
+(integer) 2
+127.0.0.1:6379> lpush mylist hello2
+(integer) 3
+127.0.0.1:6379> lpush mylist hello3
+(integer) 4
+127.0.0.1:6379> lrange mylist 0 -1
+1) "hello3"
+2) "hello2"
+3) "hello1"
+4) "hello"
+127.0.0.1:6379> ltrim mylist 1 2   
+OK
+127.0.0.1:6379> lrange mylist 0 -1
+1) "hello2"
+2) "hello1"
+```
+
+```
+rpoplpush：
+127.0.0.1:6379> rpush mylist "hello"
+(integer) 1
+127.0.0.1:6379> rpush mylist "hello1"
+(integer) 2
+127.0.0.1:6379> rpush mylist "hello2"
+(integer) 3
+127.0.0.1:6379> rpoplpush mylist myotherlist   #移除列表的最后一个元素，将他移动到新的列表中
+"hello2"
+127.0.0.1:6379> lrange mylist 0 -1
+1) "hello"
+2) "hello1"
+127.0.0.1:6379> lrange myotherlist  0 -1
+1) "hello2"
+```
+
+```
+更新列表：
+127.0.0.1:6379> lset list 0 item  #不存在列表就会报错
+(error) ERR no such key
+127.0.0.1:6379> lpush list value1
+(integer) 1
+127.0.0.1:6379> lrange list 0 0
+1) "value1"
+127.0.0.1:6379> lset list 0 item  #列表中存在下标就会更新下标的值
+OK
+127.0.0.1:6379> lrange list 0 0
+1) "item"
+127.0.0.1:6379> lset list 1 item  #列表中不存在下标就会报错
+(error) ERR index out of range
+```
+
+```
+将某一个具体的value插入到列表中某个元素的前面或者后面
+127.0.0.1:6379> rpush mylist hello
+(integer) 1
+127.0.0.1:6379> rpush mylist world
+(integer) 2
+127.0.0.1:6379> linsert mylist before world other
+(integer) 3
+127.0.0.1:6379> lrange mylist 0 -1
+1) "hello"
+2) "other"
+3) "world"
+```
+
+![image-20210105232302240](images\image-20210105232302240.png)
+
+##### Set
+
+```
+添加元素，查看set所有值，判断某一个值是否在set中，获取元素个数：
+127.0.0.1:6379> sadd myset hello
+(integer) 1
+127.0.0.1:6379> sadd myset jinyu
+(integer) 1
+127.0.0.1:6379> smembers myset
+1) "jinyu"
+2) "hello"
+127.0.0.1:6379> sismember myset hello
+(integer) 1
+127.0.0.1:6379> sismember myset world
+(integer) 0
+127.0.0.1:6379> scard myset
+(integer) 2
+127.0.0.1:6379> sadd myset lovejinyu
+(integer) 1
+127.0.0.1:6379> scard myset
+(integer) 3
+```
+
+```
+移除指定元素：
+127.0.0.1:6379> srem myset hello
+(integer) 1
+127.0.0.1:6379> scard myset
+(integer) 2
+127.0.0.1:6379> smembers myset
+1) "jinyu"
+2) "lovejinyu"
+```
+
+```
+随机抽出元素,随机抽选出指定个数的元素:
+127.0.0.1:6379> SRANDMEMBER myset
+"jinyu"
+127.0.0.1:6379> SRANDMEMBER myset
+"lovejinyu"
+127.0.0.1:6379> SMEMBERS myset
+1) "jinyu"
+2) "hello1"
+3) "hello"
+4) "lovejinyu"
+127.0.0.1:6379> SRANDMEMBER myset 2
+1) "jinyu"
+2) "hello1"
+```
+
+```
+删除指定的key，随机删除key：
+127.0.0.1:6379> smembers myset
+1) "jinyu"
+2) "hello1"
+3) "hello"
+4) "lovejinyu"
+127.0.0.1:6379> spop myset    #随之删除一些set中的元素
+"jinyu"
+127.0.0.1:6379> smembers myset
+1) "hello1"
+2) "hello"
+3) "lovejinyu"
+```
+
+```
+将一个指定的值移动到另外一个集合中：
+127.0.0.1:6379> sadd myset hello
+(integer) 1
+127.0.0.1:6379> sadd myset hello1
+(integer) 1
+127.0.0.1:6379> sadd myset hello2
+(integer) 1
+127.0.0.1:6379> sadd myset2 set2
+(integer) 1
+127.0.0.1:6379> smove myset myset2 hello
+(integer) 1
+127.0.0.1:6379> SMEMBERS myset2
+1) "set2"
+2) "hello"
+```
+
+```
+微博，b站中的共同关注！（差并交集）：
+127.0.0.1:6379> sadd key1 a
+(integer) 1
+127.0.0.1:6379> sadd key1 b
+(integer) 1
+127.0.0.1:6379> sadd key1 c
+(integer) 1
+127.0.0.1:6379> sadd key2 c
+(integer) 1
+127.0.0.1:6379> sadd key2 d
+(integer) 1
+127.0.0.1:6379> sadd key2 e
+(integer) 1
+127.0.0.1:6379> SDIFF key1 key2
+1) "a"
+2) "b"
+127.0.0.1:6379> SINTER key1 key2
+1) "c"
+127.0.0.1:6379> SUNION key1 key2
+1) "a"
+2) "b"
+3) "c"
+4) "e"
+5) "d"
+```
+
+![image-20210105232507715](images\image-20210105232507715.png)
+
+##### hash
+
+```
+存取：
+127.0.0.1:6379> hset myhash field1 jinyu
+(integer) 1
+127.0.0.1:6379> hget myhash field1   #set一个具体的key-value
+"jinyu"
+127.0.0.1:6379> hmset myhash field1 hello field2 world   #set多个key-value
+OK
+127.0.0.1:6379> hmget myhash field1 field2   #获取多个字段值
+1) "hello"
+2) "world"
+127.0.0.1:6379> HGETALL myhash    #获取全部的数据
+1) "field1"
+2) "hello"
+3) "field2"
+4) "world"
+```
+
+```
+删除hash指定的key字段：
+127.0.0.1:6379> hdel myhash field1
+(integer) 1
+127.0.0.1:6379> hgetall myhash
+1) "field2"
+2) "world"
+```
+
+```
+获取hash的字段数量：
+127.0.0.1:6379> hgetall myhash
+1) "field2"
+2) "world"
+3) "field1"
+4) "hello"
+127.0.0.1:6379> hlen myhash
+(integer) 2
+```
+
+```
+判断hash中字段是否存在：
+127.0.0.1:6379> HEXISTS myhash field1
+(integer) 1
+127.0.0.1:6379> HEXISTS myhash field3
+(integer) 0
+```
+
+```
+只获得所有的field，只获得所有的value：
+127.0.0.1:6379> hkeys myhash
+1) "field2"
+2) "field1"
+127.0.0.1:6379> hvals myhash
+1) "world"
+2) "hello"
+```
+
+```
+增减：
+127.0.0.1:6379> hset myhash field3 5
+(integer) 1
+127.0.0.1:6379> HINCRBY myhash field3 1
+(integer) 6
+127.0.0.1:6379> HINCRBY myhash field3 -2
+(integer) 4
+```
+
+```
+不存在则可以设置：
+127.0.0.1:6379> hsetnx myhash field4 hello
+(integer) 1
+127.0.0.1:6379> hsetnx myhash field4 world
+(integer) 0
+```
+
+```
+hash存变更的数据，尤其是用户信息的保存。 user name age。hash更适合对象的存储，string更适合字符串的存储（上面string数据格式命令讲过）：
+127.0.0.1:6379> hset user:1 name jinyu
+(integer) 1
+127.0.0.1:6379> hget user:1 name
+"jinyu"
+```
+
+![image-20210105232713291](images\image-20210105232713291.png)
+
+##### Zset
+
+```
+添加多个值：
+127.0.0.1:6379> zadd myset 1 one
+(integer) 1
+127.0.0.1:6379> zadd myset 2 two
+(integer) 1
+127.0.0.1:6379> zadd myset 3 three
+(integer) 1
+127.0.0.1:6379> zrange myset 0 -1
+1) "one"
+2) "two"
+3) "three"
+```
+
+```
+根据成绩排序输出：
+127.0.0.1:6379> zadd salary 2500 xiaohong
+(integer) 1
+127.0.0.1:6379> zadd salary 5000 zhangsan
+(integer) 1
+127.0.0.1:6379> zadd salary 50 kuangshen
+(integer) 1
+127.0.0.1:6379> ZRANGEBYSCORE salary -inf  +inf  #从小到大排序
+1) "kuangshen"
+2) "xiaohong"
+3) "zhangsan"
+127.0.0.1:6379> ZREVRANGE salary 0 -1  #从大到小排序
+1) "zhangsan"
+2) "xiaohong"
+3) "kuangshen"
+
+127.0.0.1:6379> ZRANGEBYSCORE salary -inf +inf withscores  #从小到大排序 并且附带成绩
+1) "kuangshen"
+2) "50"
+3) "xiaohong"
+4) "2500"
+5) "zhangsan"
+6) "5000"
+127.0.0.1:6379> ZRANGEBYSCORE salary -inf 2500 withscores  #显示工资小于2500的员工的升序排列
+1) "kuangshen"
+2) "50"
+3) "xiaohong"
+4) "2500"
+```
+
+```
+移除指定元素的数据：
+127.0.0.1:6379> zrange salary 0 -1
+1) "kuangshen"
+2) "xiaohong"
+3) "zhangsan"
+127.0.0.1:6379> zrem salary xiaohong
+(integer) 1
+127.0.0.1:6379> zrange salary 0 -1
+1) "kuangshen"
+2) "zhangsan"
+```
+
+```
+查询数据的数量：
+127.0.0.1:6379> zcard salary
+(integer) 2
+```
+
+```
+获取成绩在指定区间的个数：
+127.0.0.1:6379> zadd myset 1 hello
+(integer) 1
+127.0.0.1:6379> zadd myset 2 world 3 jinyu
+(integer) 2
+127.0.0.1:6379> zcount myset  1 3
+(integer) 3
+127.0.0.1:6379> zcount myset  1 2
+(integer) 2
+```
+
+#### 3.3三大特殊数据类型
+
+##### geospatial
+
+地理位置
+
+```
+geoadd:
+#添加城市数据,规则：两极没法添加，一般通过java程序一次性导入
+#参数 key 值（经度，维度，名称）
+#有效的经度从-180度到180度。
+#有效的纬度从-85.05112878度到85.05112878度
+127.0.0.1:6379> geoadd china:city 116.40 39.90 beijing
+(integer) 1
+127.0.0.1:6379> geoadd china:city 121.47 31.23 shanghai
+(integer) 1
+127.0.0.1:6379> geoadd china:city 106.50 29.53 chongqing
+(integer) 1
+127.0.0.1:6379> geoadd china:city 114.05 22.52 shenzhen
+(integer) 1
+127.0.0.1:6379> geoadd china:city 120.16 30.24 hangzhou
+(integer) 1
+127.0.0.1:6379> geoadd china:city 108.96 34.26 xian
+(integer) 1
+```
+
+```
+获取指定城市的经度和维度geopos：
+127.0.0.1:6379> GEOPOS china:city beijing chongqing
+1) 1) "116.39999896287918091"
+   2) "39.90000009167092543"
+2) 1) "106.49999767541885376"
+   2) "29.52999957900659211"
+```
+
+```
+两人之间的距离geodist：
+m 表示单位为米。
+km 表示单位为千米。
+mi 表示单位为英里。
+ft 表示单位为英尺。
+127.0.0.1:6379> geodist china:city shanghai beijing
+"1067378.7564"
+127.0.0.1:6379> geodist china:city shanghai beijing km
+"1067.3788"
+```
+
+```
+找附近的人？获得所有附近的人的位置，以半径搜索
+georadius和georadiusbymember:
+127.0.0.1:6379> GEORADIUS china:city 110 30 500 km  #显示到中心半径为500km的地方
+1) "chongqing"
+2) "xian"
+127.0.0.1:6379> GEORADIUS china:city 110 30 500 km withcoord #查询后返回经纬度
+1) 1) "chongqing"
+   2) 1) "106.49999767541885376"
+      2) "29.52999957900659211"
+2) 1) "xian"
+   2) 1) "108.96000176668167114"
+      2) "34.25999964418929977"
+127.0.0.1:6379> GEORADIUS china:city 110 30 500 km withcoord count 1 #限制查询的个数
+1) 1) "chongqing"
+   2) 1) "106.49999767541885376"
+      2) "29.52999957900659211"
+127.0.0.1:6379> GEORADIUSBYMEMBER china:city beijing 1000 km  #查距离北京1000km 的城市
+1) "beijing"
+2) "xian"
+127.0.0.1:6379> GEORADIUSBYMEMBER china:city shanghai 400 km
+1) "hangzhou"
+2) "shanghai"
+```
+
+```
+geo的底层就是zset，所以可以使用zset操作geo
+127.0.0.1:6379> ZRANGE china:city 0 -1
+1) "chongqing"
+2) "xian"
+3) "shenzhen"
+4) "hangzhou"
+5) "shanghai"
+6) "beijing"
+127.0.0.1:6379> zrem china:city beijing
+(integer) 1
+127.0.0.1:6379> ZRANGE china:city 0 -1
+1) "chongqing"
+2) "xian"
+3) "shenzhen"
+4) "hangzhou"
+5) "shanghai"
+```
+
+##### Hyperloglog
+
+```
+Hyperloglog基数统计的算法。
+优点：占用的内存固定，2^64不同的元素的基数，只需要12KB内存。
+网页的UV(一个人访问网站多次，但是还是算做一个人)：
+传统方式，set保存用户uid，统计set中元素的数量就行，这种方式保存大量用户id，我们的目的是为了计数。
+0.81%错误率，但是在统计UV时可以忽略不计。
+
+127.0.0.1:6379> PFADD mykey a b c d e  f g h i j  #创建第一组元素
+(integer) 1
+127.0.0.1:6379> PFCOUNT mykey #统计mykey元素的基数数量
+(integer) 10
+127.0.0.1:6379> pfadd mykey2 i n g d s o p
+(integer) 1
+127.0.0.1:6379> PFCOUNT mykey2
+(integer) 7
+127.0.0.1:6379> PFMERGE mykey3 mykey mykey2 #合并两组元素为mykey3
+OK 
+127.0.0.1:6379> PFCOUNT mykey3 #统计mykey3的基数数量
+(integer) 14
+```
+
+##### Bitmaps
+
+```
+位存储。
+应用：统计疫情感染人数：0000，感染的变1
+           统计用户信息：活跃和不活跃，登录和未登录，365天打卡--365bit--46字节。两个状态的任务
+BitMap位图，数据结构，都是操作二进制位进行记录，只有0和1两个状态。
+
+记录周一到周日的打卡：
+127.0.0.1:6379> setbit sign 0 1
+(integer) 0
+127.0.0.1:6379> setbit sign 1 0
+(integer) 0
+127.0.0.1:6379> setbit sign 2 1
+(integer) 0
+127.0.0.1:6379> setbit sign 3 1
+(integer) 0
+127.0.0.1:6379> setbit sign 4 0
+(integer) 0
+127.0.0.1:6379> setbit sign 5 1
+(integer) 0
+127.0.0.1:6379> setbit sign 6 0
+(integer) 0
+```
+
+```
+查看某一天是否打卡：
+127.0.0.1:6379> getbit sign 3
+(integer) 1
+127.0.0.1:6379> getbit sign 6
+(integer) 0
+```
+
+```
+统计打卡的天数：
+127.0.0.1:6379> bitcount sign
+(integer) 4
+```
 
 ### 4.为什么Redis使用单线程模型而不是用多线程呢？
 
@@ -6586,7 +7288,7 @@ epoll 中的读、写、关闭、连接都转化成了事件，然后利用 epol
 
 ![高性能多路复用](images\高性能多路复用.jpg)
 
-Redis 线程不会阻塞在某一个特定的监听或已连接套接字上，也就是说，不会阻塞在某一个特定的客户端请求处理上。正因为此，Redis 可以同时和多个客户端连接并处理请求，从而提升并发性。
+Redis 线程不会阻塞在某一个特定的监听或已连接套接字上，也就是说，不会阻塞在某一个特定的客户端请求处理上。正因为此，Redis 可以同时和多个客户端连接并处理请求，从而提升并发性。 
 
 ### 6.Redis全局hash字典？
 
@@ -6684,7 +7386,7 @@ Redis 提供了主从模式，通过主从复制，将数据冗余一份复制�
 > - 读操作：主、从库都可以执行；
 > - 写操作：主库先执行，之后将写操作同步到从库；
 
-![Redis读写分离](D:\Users\yjin5\ibu-doc\knowsCollection\images\Redis读写分离.jpg)
+![Redis读写分离](images\Redis读写分离.jpg)
 
 > 主从复制的其他作用？
 >
@@ -6706,7 +7408,7 @@ Redis 提供了主从模式，通过主从复制，将数据冗余一份复制�
 > 2. 主库同步数据给从库：master 执行 `bgsave`命令生成 RDB 文件，并将文件发送给从库，同时**主库**为每一个 slave 开辟一块 replication buffer 缓冲区记录从生成 RDB 文件开始收到的所有写命令。从库保存 RDB 并清空数据库再加载 RDB 数据到内存中。
 > 3. 发送 RDB 之后接收到的新写命令到从库：在生成 RDB 文件之后的写操作并没有记录到刚刚的 RDB 文件中，为了保证主从库数据的一致性，所以主库会在内存中使用一个叫 replication buffer 记录 RDB 文件生成后的所有写操作。并将里面的数据发送到 slave。
 
-![Redis的全量同步](D:\Users\yjin5\ibu-doc\knowsCollection\images\Redis的全量同步.jpg)
+![Redis的全量同步](images\Redis的全量同步.jpg)
 
 > 网络断开重新连接同步？
 >
@@ -6729,7 +7431,7 @@ Redis 提供了主从模式，通过主从复制，将数据冗余一份复制�
 
 ### 10.哨兵模式？
 
-兵是 Redis 的一种运行模式，它专注于**对 Redis 实例（主节点、从节点）运行状态的监控，并能够在主节点发生故障时通过一系列的机制实现选主及主从切换，实现故障转移，确保整个 Redis 系统的可用性**。
+哨兵是 Redis 的一种运行模式，它专注于**对 Redis 实例（主节点、从节点）运行状态的监控，并能够在主节点发生故障时通过一系列的机制实现选主及主从切换，实现故障转移，确保整个 Redis 系统的可用性**。
 
 Redis 哨兵具备的能力有如下几个：
 
@@ -6800,3 +7502,358 @@ Redis 哨兵具备的能力有如下几个：
 > **MOVED** 错误（负载均衡，数据已经迁移到其他实例上）：当客户端将一个键值对操作请求发送给某个实例，而这个键所在的槽并非由自己负责的时候，该实例会返回一个 MOVED 错误指引转向正在负责该槽的节点。
 >
 > **ASK**槽部分迁移未完成的情况下，如果需要访问的 key 所在 Slot 正在从 实例 1 迁移到 实例 2（如果 key 已经不在实例 1），实例 1 会返回客户端一条 ASK 报错信息：**客户端请求的 key 所在的哈希槽正在迁移到实例 2 上，你先给实例 2 发送一个 ASKING 命令，接着发发送操作命令**。
+
+### 12.分布式锁？
+
+#### 背景：
+
+与分布式锁相对应的是「单机锁」，我们在写多线程程序时，避免同时操作一个共享变量产生数据问题，通常会使用一把锁来「互斥」，以保证共享变量的正确性，其使用范围是在「同一个进程」中。
+
+如果换做是多个进程，需要同时操作一个共享资源，如何互斥呢？
+
+例如，现在的业务应用通常都是微服务架构，这也意味着一个应用会部署多个进程，那这多个进程如果需要修改 MySQL 中的同一行记录时，为了避免操作乱序导致数据错误，此时，我们就需要引入「分布式锁」来解决这个问题了。
+
+#### SETNX命令
+
+```
+SETNX key value
+```
+
+将 key 的值设为 value，当且仅当 key 不存在。 
+
+若给定的 key 已经存在，则 SETNX 不做任何动作。 
+SETNX 是SET if Not eXists的简写。
+
+#### 返回值
+
+返回整数，具体为 
+\- 1，当 key 的值被设置 
+\- 0，当 key 的值没被设置
+
+#### 使用SETNX实现分布式锁
+
+多个进程执行以下Redis命令：
+
+　　SETNX lock.foo <current Unix time + lock timeout + 1>
+
+如果 SETNX 返回1，说明该进程获得锁，SETNX将键 lock.foo 的值设置为锁的超时时间（当前时间 + 锁的有效时间）。 
+如果 SETNX 返回0，说明其他进程已经获得了锁，进程不能进入临界区。进程可以在一个循环中不断地尝试 SETNX 操作，以获得锁。
+
+#### 执行步骤
+
+线程A调用setnx命令，设置key为lock.foo（所有线程要用同样的key，否则就不是一个锁了），值为current Unix time + lock timeout + 1，即当前时间加上加锁时长，最终的值也就是过期时间。如果A对锁的持有结束，则可自行调用del lock.foo来释放锁。
+
+A持有锁的过程中线程B在调用命令SETNX lock.foo,会得到返回值0，这说明这个锁已经被其他线程获取，这时B应该去获取lock.foo的值，看看是否小于当前时间，如果大于则锁未过期，B需要继续循环等待检查或者做其他操作；如果小于则锁已过期，B可以用del lock.foo方法去删除锁，然后在SETNX lock.foo 来获取锁。
+
+这样就完成了分布式锁的最基本的模型，并且避免了因A线程挂掉无法释放锁而导致的死锁问题。
+
+#### 死锁问题
+
+考虑一种情况，如果进程获得锁后，断开了与 Redis 的连接（可能是进程挂掉，或者网络中断），如果没有有效的释放锁的机制，那么其他进程都会处于一直等待的状态，即出现“死锁”。
+
+上面在使用 SETNX 获得锁时，我们将键 lock.foo 的值设置为锁的有效时间，进程获得锁后，其他进程还会不断的检测锁是否已超时，如果超时，那么等待的进程也将有机会获得锁。
+
+然而，锁超时时，我们不能简单地使用 DEL 命令删除键 lock.foo 以释放锁。考虑以下情况，进程P1已经首先获得了锁 lock.foo，然后进程P1挂掉了。进程P2，P3正在不断地检测锁是否已释放或者已超时，执行流程如下：
+
+- P2和P3进程读取键 lock.foo 的值，检测锁是否已超时（通过比较当前时间和键 lock.foo 的值来判断是否超时）
+- P2和P3进程发现锁 lock.foo 已超时
+- P2执行 DEL lock.foo命令
+- P2执行 SETNX lock.foo命令，并返回1，即P2获得锁
+- P3执行 DEL lock.foo命令将P2刚刚设置的键 lock.foo 删除（这步是由于P3刚才已检测到锁已超时）
+- P3执行 SETNX lock.foo命令，并返回1，即P3获得锁
+- P2和P3同时获得了锁
+
+从上面的情况可以得知，在检测到锁超时后，进程不能直接简单地执行 DEL 删除键的操作以获得锁。
+
+#### 解决死锁
+
+为了解决上述算法可能出现的多个进程同时获得锁的问题，我们再来看以下的算法。 
+我们同样假设进程P1已经首先获得了锁 lock.foo，然后进程P1挂掉了。接下来的情况：
+
+- 进程P4执行 SETNX lock.foo 以尝试获取锁
+- 由于进程P1已获得了锁，所以P4执行 SETNX lock.foo 返回0，即获取锁失败
+- P4执行 GET lock.foo 来检测锁是否已超时，如果没超时，则等待一段时间，再次检测
+- 如果P4检测到锁已超时，即当前的时间大于键 lock.foo 的值，P4会执行以下操作 
+
+　　　　GETSET lock.foo <current Unix timestamp + lock timeout + 1>
+
+- 由于 GETSET 操作在设置键的值的同时，还会返回键的旧值，通过比较键 lock.foo 的旧值是否小于当前时间，可以判断进程是否已获得锁
+- 假如另一个进程P5也检测到锁已超时，并在P4之前执行了 GETSET 操作，那么P4的 GETSET 操作返回的是一个大于当前时间的时间戳，这样P4就不会获得锁而继续等待。注意到，即使P4接下来将键 lock.foo 的值设置了比P5设置的更大的值也没影响。
+
+另外，值得注意的是，在进程释放锁，即执行 DEL lock.foo 操作前，需要先判断锁是否已超时。如果锁已超时，那么锁可能已由其他进程获得，这时直接执行 DEL lock.foo 操作会导致把其他进程已获得的锁释放掉。
+
+### 13.Redis缓存雪崩和穿透？
+
+#### 缓存击穿问题：
+
+##### 背景：
+
+缓存穿透的概念很简单，用户想要查询一个数据，发现redis内存数据库没有，也就是缓存没有命中，于是向持久层数据库查询。发现也没有，于是本次查询失败。当用户很多的时候，缓存都没有命中，于是都去请求了持久层数据库。这会给持久层数据库造成很大的压力，这时候就相当于出现了缓存穿透。
+
+##### 解决方法：
+
+1.布隆过滤器
+
+参考：https://www.cnblogs.com/cpselvis/p/6265825.html
+
+**目的**：**判断一个元素是否存在一个集合中？**
+
+**常规思路**
+
+- 数组
+- 链表
+- 树、平衡二叉树、Trie
+- Map (红黑树)
+- 哈希表
+
+虽然上面描述的这几种数据结构配合常见的排序、二分搜索可以快速高效的处理绝大部分判断元素是否存在集合中的需求。但是当集合里面的元素数量足够大，如果有500万条记录甚至1亿条记录呢？这个时候常规的数据结构的问题就凸显出来了。数组、链表、树等数据结构会存储元素的内容，一旦数据量过大，消耗的内存也会呈现线性增长，最终达到瓶颈。有的同学可能会问，哈希表不是效率很高吗？查询效率可以达到O(1)。但是哈希表需要消耗的内存依然很高。使用哈希表存储一亿 个垃圾 email 地址的消耗？哈希表的做法：首先，哈希函数将一个email地址映射成8字节信息指纹；考虑到哈希表存储效率通常小于50%（哈希冲突）；因此消耗的内存：8 * 2 * 1亿 字节 = 1.6G 内存，普通计算机是无法提供如此大的内存。这个时候，布隆过滤器（Bloom Filter）就应运而生。在继续介绍布隆过滤器的原理时，先讲解下关于哈希函数的预备知识。
+
+**原理：**
+
+![布隆过滤器](images\布隆过滤器.png)
+
+布隆过滤器（Bloom Filter）的核心实现是一个超大的位数组和几个哈希函数。假设位数组的长度为m，哈希函数的个数为k。
+
+以上图为例，具体的操作流程：假设集合里面有3个元素{x, y, z}，哈希函数的个数为3。首先将位数组进行初始化，将里面每个位都设置位0。对于集合里面的每一个元素，将元素依次通过3个哈希函数进行映射，每次映射都会产生一个哈希值，这个值对应位数组上面的一个点，然后将位数组对应的位置标记为1。查询W元素是否存在集合中的时候，同样的方法将W通过哈希映射到位数组上的3个点。如果3个点的其中有一个点不为1，则可以判断该元素一定不存在集合中。反之，如果3个点都为1，则该元素可能存在集合中。注意：此处不能判断该元素是否一定存在集合中，可能存在一定的误判率。可以从图中可以看到：假设某个元素通过映射对应下标为4，5，6这3个点。虽然这3个点都为1，但是很明显这3个点是不同元素经过哈希得到的位置，因此这种情况说明元素虽然不在集合中，也可能对应的都是1，这是误判率存在的原因。
+
+2.缓存空对象
+
+当存储层不命中后，即使返回的空对象也将其缓存起来，同时会设置一个过期时间，之后再访问这个数据将会从缓存中获取，保护了后端数据源；
+
+![Redis缓存空对象](images\Redis缓存空对象.jpeg)
+
+#### 缓存雪崩问题：
+
+缓存雪崩是指，缓存层出现了错误，不能正常工作了。于是所有的请求都会达到存储层，存储层的调用量会暴增，造成存储层也会挂掉的情况。
+
+1.搭建Redis集群:这个思想的含义是，既然redis有可能挂掉，那我多增设几台redis，这样一台挂掉之后其他的还可以继续工作，其实就是搭建的集群。
+
+2.限流降级：这个解决方案的思想是，在缓存失效后，通过加锁或者队列来控制读数据库写缓存的线程数量。比如对某个key只允许一个线程查询数据和写缓存，其他线程等待。
+
+3.数据预热：数据加热的含义就是在正式部署之前，我先把可能的数据先预先访问一遍，这样部分可能大量访问的数据就会加载到缓存中。在即将发生大并发访问前手动触发加载缓存不同的key，设置不同的过期时间，让缓存失效的时间点尽量均匀。
+
+### 14.Redis 与 MySQL双写一致性如何保证？
+
+参考：微信公众号**捡田螺的小男孩**
+
+#### 14.1一致性问题
+
+- **强一致性**：这种一致性级别是最符合用户直觉的，它要求系统写入什么，读出来的也会是什么，用户体验好，但实现起来往往对系统的性能影响大
+- **弱一致性**：这种一致性级别约束了系统在写入成功后，不承诺立即可以读到写入的值，也不承诺多久之后数据能够达到一致，但会尽可能地保证到某个时间级别（比如秒级别）后，数据能够达到一致状态
+- **最终一致性**：最终一致性是弱一致性的一个特例，系统会保证在一定时间内，能够达到一个数据一致的状态。这里之所以将最终一致性单独提出来，是因为它是弱一致性中非常推崇的一种一致性模型，也是业界在大型分布式系统的数据一致性上比较推崇的模型
+
+#### 14.2**三个经典的缓存模式**
+
+##### ①Cache-Aside Pattern**旁路缓存模式**
+
+它的提出是为了尽可能地解决缓存与数据库的数据不一致问题。
+
+​		**Cache-Aside读请求**
+
+1. 读的时候，先读缓存，缓存命中的话，直接返回数据
+
+2. 缓存没有命中的话，就去读数据库，从数据库取出数据，放入缓存后，同时返回响应。
+
+   **Cache-Aside读请求**
+
+   更新的时候，先**更新数据库，然后再删除缓存**。
+
+##### ②Read-Through/Write-Through：读写穿透
+
+​	  **Read-Through**
+
+​	1.从缓存读取数据，读到直接返回
+
+​	2.如果读取不到的话，从数据库加载，写入缓存后，再返回响应。
+
+![read_through](images\read_through.jpg)
+
+Read-Through实际只是在**Cache-Aside**之上进行了一层封装，它会让程序代码变得更简洁，同时也减少数据源上的负载。
+
+​		**Write-Through**
+
+​	**Write-Through**模式下，当发生写请求时，也是由**缓存抽象层**完成数据源和缓存数据的更新,流程如下：
+
+![write_through](images\write_through.jpg)
+
+##### ③Write-behind ：异步缓存写入
+
+**Write-behind** 跟Read-Through/Write-Through有相似的地方，都是由**Cache Provider**来负责缓存和数据库的读写。它们又有个很大的不同：**Read/Write-Through**是同步更新缓存和数据的，**Write-Behind**则是只更新缓存，不直接更新数据库，通过**批量异步**的方式来更新数据库。
+
+![write_behind](images\write_behind.jpg)
+
+这种方式下，缓存和数据库的一致性不强，**对一致性要求高的系统要谨慎使用**。但是它适合频繁写的场景，MySQL的**InnoDB Buffer Pool机制**就使用到这种模式。
+
+#### 14.3**操作缓存的时候，到底是删除缓存呢，还是更新缓存？**
+
+日常开发中，我们一般使用的就是**Cache-Aside**模式。Cache-Aside**在写入请求的时候，为什么是**删除缓存而不是更新缓存**呢？
+
+![删除缓存非更新](images\删除缓存非更新.png)
+
+1. 线程A先发起一个写操作，第一步先更新数据库
+2. 线程B再发起一个写操作，第二步更新了数据库
+3. 由于网络等原因，线程B先更新了缓存
+4. 线程A更新缓存。
+
+这时候，缓存保存的是A的数据（老数据），数据库保存的是B的数据（新数据），数据**不一致**了，脏数据出现啦。如果是**删除缓存取代更新缓存**则不会出现这个脏数据问题。
+
+#### 14.4 **双写的情况下，先操作数据库还是先操作缓存？**
+
+`Cache-Aside`缓存模式中，在写请求过来的时候，为什么是**先操作数据库呢**？为什么**不先操作缓存**呢？
+
+假设有A、B两个请求，请求A做更新操作，请求B做查询读取操作。
+
+![先操作缓存造成的问题](images\先操作缓存造成的问题.png)
+
+1. 线程A发起一个写操作，第一步del cache
+2. 此时线程B发起一个读操作，cache miss
+3. 线程B继续读DB，读出来一个老数据
+4. 然后线程B把老数据设置入cache
+5. 线程A写入DB最新的数据
+
+酱紫就有问题啦，**缓存和数据库的数据不一致了。缓存保存的是老数据，数据库保存的是新数据**。因此，Cache-Aside缓存模式，选择了先操作数据库而不是先操作缓存。
+
+#### 14.4先操作数据库后缓存造成不一致怎么办？
+
+先操作数据库再操作缓存，不一样也会导致数据不一致嘛？它俩又不是原子性操作的。这个是**会的**，但是这种方式，一般因为删除缓存失败等原因，才会导致脏数据，这个概率就很低接下来我们再来分析这种**删除缓存失败**的情况，**如何保证一致性**。
+
+![先操作数据库后缓存](images\先操作数据库后缓存.png)
+
+**有些朋友可能认为，在第2步删除缓存之前，线程B读过来呢？这时候，读到的是缓存老数据，这个可以认为是正常业务逻辑呀，下次再读取就是正确数据了。**
+
+这种方案***\*「没有明显的并发问题」，\****但是呢，**「步骤二删除缓存失败」**，也会造成缓存和数据库不一致的情况。
+
+#### 14.5三种方案保持数据库和缓存的一致性？
+
+实际上，没办法做到数据库与缓存**绝对的一致性**。其实，这是由**CAP理论**决定的。缓存系统适用的场景就是非强一致性的场景，它属于CAP中的AP。**个人觉得，追求绝对一致性的业务场景，不适合引入缓存**。CAP理论，指的是在一个分布式系统中， Consistency（一致性）、 Availability（可用性）、Partition tolerance（分区容错性），三者不可得兼。
+
+> 三种方案保证数据库和缓存的一致性
+
+**①缓存延时双删策略**
+
+先操作缓存也是可以的。
+
+1. 先删除缓存
+2. 再更新数据库
+3. 休眠一会（比如1秒），再次删除缓存
+
+这个休眠时间 =  读业务逻辑数据的耗时 + 几百毫秒。为了确保读请求结束，写请求可以删除读请求可能带来的缓存脏数据。
+
+但是也存在第二次删除缓存失败的风险。
+
+**②删除缓存重试机制**
+
+不管是**延时双删**还是**Cache-Aside的先操作数据库再删除缓存**，都可能会存在第二步的删除缓存失败，导致的数据不一致问题。可以使用这个方案优化：删除失败就多删除几次呀,保证删除缓存成功就可以了呀~ 所以可以引入**删除缓存重试机制**
+
+![重复删除缓存](images\重复删除缓存.jpg)
+
+**③读取binlog异步删除缓存**
+
+![读取binlog异步删除缓存](images\读取binlog异步删除缓存.jpg)
+
+以mysql为例吧
+
+- 可以使用阿里的canal将binlog日志采集发送到MQ队列里面
+- 然后通过ACK机制确认处理这条更新消息，删除缓存，保证数据缓存一致性
+
+### 15.Redis事务？
+
+Redis 事务可以一次执行多个命令， 并且带有以下两个重要的保证：
+
+- 事务是一个单独的隔离操作：事务中的所有命令都会序列化、按顺序地执行。事务在执行的过程中，不会被其他客户端发送来的命令请求所打断。
+- 事务是一个原子操作：事务中的命令要么全部被执行，要么全部都不执行。
+
+一个事务从开始到执行会经历以下三个阶段：
+
+- 开始事务multi。
+- 命令入队。
+- 执行事务exec。
+
+**注意：**
+
+- 当命令本身没错，因为操作的数据结构引发的错误，则执行这个命令出现错误，且之前和之后的命令都会正常执行。
+
+```
+127.0.0.1:6379> FLUSHDB
+OK
+127.0.0.1:6379> MULTI
+OK
+127.0.0.1:6379> SET key1 value1
+QUEUED
+127.0.0.1:6379> SET key2 value2
+QUEUED
+127.0.0.1:6379> INCR key1
+QUEUED
+127.0.0.1:6379> DEL key2
+QUEUED
+127.0.0.1:6379> EXEC
+1) OK
+2) OK
+3) (error) ERR value is not an integer or out of range
+4) (integer) 1
+127.0.0.1:6379> GET key1
+"value1"
+127.0.0.1:6379> GET key2
+(nil)
+127.0.0.1:6379> 
+我们将 key1 设置为字符串，而使用命令 incr 对其自增，但是命令只会进入事务队列，而没有被执行，所以它不会有任何的错误发生，而是等待 exec 命令的执行。
+当 exec 命令执行后，之前进入队列的命令就依次执行，当遇到 incr 时发生命令操作的数据类型错误，所以显示出了错误，而其之前和之后的命令都会被正常执行.
+```
+
+- 命令本身出错
+
+  ```
+  127.0.0.1:6379> FLUSHDB
+  OK
+  127.0.0.1:6379> MULTI
+  OK
+  127.0.0.1:6379> set key1 value1
+  QUEUED
+  127.0.0.1:6379> incr
+  (error) ERR wrong number of arguments for 'incr' command
+  127.0.0.1:6379> set key2 value2
+  QUEUED
+  127.0.0.1:6379> EXEC
+  (error) EXECABORT Transaction discarded because of previous errors.
+  127.0.0.1:6379> GET key1
+  (nil)
+  127.0.0.1:6379> GET key2
+  (nil)
+  127.0.0.1:6379> 
+  可以看到我们使用的 incr 命令格式是错误的，这个时候 Redis 会立即检测出来并产生错误，而在此之前我们设置了 keyl ， 在此之后我们设置了 key2 a 当事务执行的时候，我们发现 keyl 和 key2 的值都为空，说明被 Redis 事务回滚了。
+  ```
+
+  >乐观锁问题
+
+  乐观锁假设认为数据一般情况下不会造成冲突，所以在数据进行提交更新的时候，才会正式对数据的冲突与否进行检测，如果发现冲突了，则让返回用户错误的信息，让用户决定如何去做。
+
+  **乐观锁主要用于抢红包，淘宝抢购，秒杀之类**
+
+  redis实现乐观锁，主要使用watch监控一个key的状态实现乐观锁。
+
+  例子：
+
+  ```
+  线程一：
+  127.0.0.1:6379> watch money   #监视money
+  OK
+  127.0.0.1:6379> MULTI
+  OK
+  127.0.0.1:6379> DECRBY money 10
+  QUEUED
+  127.0.0.1:6379> DECRBY out 10    #事务还没执行，线程2修改money为1000,此时再执行exec，会执行失败
+  QUEUED
+  127.0.0.1:6379> exec    
+  (nil)
+  ```
+
+  ```
+  线程2：
+  127.0.0.1:6379> get money
+  "80"
+  127.0.0.1:6379> set money 1000
+  OK
+  ```
+
+  原理：先去监视money，当我们在事务中执行时，会去比较值钱监视的money值，如果改变了，则执行失败
+
