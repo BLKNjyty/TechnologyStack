@@ -2776,7 +2776,48 @@ class Teachers extends People{
 
 方法而言：接口方法默认public，且java8之前没默认实现（java8有默认实现和静态方法）。抽象类的方法可以有实现
 
-变量而言：接口中的变量都是static,final类型，类不一定
+变量而言：接口中的变量都是static final类型，类不一定
+
+> 为什么？
+>
+> ```java
+> public interface MyAInterface{
+>     
+>     public static final int NAME = "zhangsan"; 
+>       
+>     public abstract void show();
+> }
+> ```
+>
+> **然后解释成员变量为什么必须是static final修饰的常量呢？**
+>
+> **static**
+>
+> 必须。因为接口是可以多继承的。如果一个类实现了两个接口，且两个接口都具有相同名字的变量，此时这个变量可以被实现类使用，那么如果不是static的，这个变量来自哪一个接口就会产生歧义，所以实现类使用接口中的变量必须通过接口名指定，也就只能定为static的。
+>
+> 看下面的例子：
+>
+> ```java
+> public interface iface1 {
+>     int a = 10;
+> }
+> 
+> public interface iface2 {
+>     int a = 9;
+> }
+> 
+> public class impl implements iface1, iface2 {
+>     public static void main(String args[]){
+>         System.out.println(a);
+>     }
+> }
+> ```
+>
+> 此时，会报编译错误，因为a有歧义。
+>
+> **final**
+>
+> 既然必须是static修饰的，那么所有子类共享。而接口是一种抽象， 所以一个子类修改了值会影响到其他所有子类，因此就不应该允许子类修改这个值，所以也必须定义为final。
 
 继承：接口可以多继承，类不可以
 
@@ -3128,6 +3169,121 @@ public class TestDemo {
 }
 
 ```
+
+#### 继承+静态代码块+构造函数+成员变量
+
+```java
+public class Test {
+    Person person = new Person("Test");
+    static{
+        System.out.println("test static");
+    }
+     
+    public Test() {
+        System.out.println("test constructor");
+    }
+     
+    public static void main(String[] args) {
+        new MyClass();
+    }
+}
+ 
+class Person{
+    static{
+        System.out.println("person static");
+    }
+    public Person(String str) {
+        System.out.println("person "+str);
+    }
+}
+ 
+ 
+class MyClass extends Test {
+    Person person = new Person("MyClass");
+    static{
+        System.out.println("myclass static");
+    }
+     
+    public MyClass() {
+        System.out.println("myclass constructor");
+    }
+}
+```
+
+```
+//输出
+test static
+myclass static
+person static
+person Test
+test constructor
+person MyClass
+myclass constructor
+```
+
+类似地，我们还是来想一下这段代码的具体执行过程。首先加载Test类，因此会执行Test类中的static块。接着执行new MyClass()，而MyClass类还没有被加载，因此需要加载MyClass类。在加载MyClass类的时候，发现MyClass类继承自Test类，但是由于Test类已经被加载了，所以只需要加载MyClass类，那么就会执行MyClass类的中的static块。在加载完之后，就通过构造器来生成对象。而在生成对象的时候，必须先初始化父类的成员变量，因此会执行Test中的Person person = new Person()，而Person类还没有被加载过，因此会先加载Person类并执行Person类中的static块，接着执行父类的构造器，完成了父类的初始化，然后就来初始化自身了，因此会接着执行MyClass中的Person person = new Person()，最后执行MyClass的构造器。
+
+#### 无参构造 +有参构造+继承+静态
+
+```java
+public class Parent {
+
+    public Parent(){
+        System.out.println("父类的无参");
+    }
+
+    public Parent(String a){
+        System.out.println("父类的有参");
+    }
+
+    static {
+        System.out.println("父类的静态代码块");
+    }
+
+    {
+        System.out.println("父类的非静态代码块");
+    }
+}
+
+```
+
+```java
+ public Son(){
+        System.out.println("子类的无参");
+    }
+
+    public Son(String A){
+        System.out.println("子类的有参");
+    }
+
+    static {
+        System.out.println("子类的静态代码块");
+    }
+
+    {
+        System.out.println("子类的非静态代码块");
+    }
+
+```
+
+```java
+public class Test {
+
+    public static void main(String[] args) {
+
+        Son son = new Son();
+        System.out.println("*****");
+
+        Son sons = new Son("yy");
+        System.out.println("*****");
+    }
+}
+
+```
+
+结果：
+
+![无参和有参顺序](images\无参和有参顺序.jpg)
 
 ### 20.Jackson
 
@@ -3563,6 +3719,2008 @@ public void remove() {
 
 总结：THreadLocalMap中的Entry的key使用的是ThreadLocal对象的弱引用，在没有其他地方对ThreadLoca依赖，ThreadLocalMap中的ThreadLocal对象就会被回收掉，但是对应的不会被回收，这个时候Map中就可能存在key为null但是value不为null的项，这需要实际的时候使用完毕及时调用remove方法避免内存泄漏。
 
+### 22.java8之后有哪些改进？
+
+**接口方法可以有默认实现**：Java8 允许我们给接口添加一个非抽象的方法实现，只需要使用 default 关键字即可。
+
+**Lambda 表达式和函数式接口**：Lambda 表达式本质上是一段匿名内部类，也可以是一段可以传递的代码。
+
+Lambda 允许把函数作为一个方法的参数（函数作为参数传递到方法中），使用 Lambda 表达式使代码更加简洁，但是也不要滥用，否则会有可读性等问题，《EffectiveJava》作者 JoshBloch 建议使用 Lambda 表达式最好不要超过 3 行。
+
+```
+
+　　　　　//匿名内部类写法
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("内部类写法");
+            }
+        }).start();
+        //Lambda表达式写法
+        new Thread(() -> System.out.println("lambda写法")).start();  
+```
+
+**StreamAPI**：用函数式编程方式在集合类上进行复杂操作的工具，配合 Lambda 表达式可以方便的对集合进行处理。
+
+Java8 中处理集合的关键抽象概念，它可以指定你希望对集合进行的操作，可以执行非常复杂的查找、过滤和映射数据等操作。
+
+使用 StreamAPI 对集合数据进行操作，就类似于使用 SQL 执行的数据库查询。也可以使用 StreamAPI 来并行执行操作。
+
+简而言之，StreamAPI 提供了一种高效且易于使用的处理数据的方式。
+
+**方法引用**：方法引用提供了非常有用的语法，可以直接引用已有 Java 类或对象（实例）的方法或构造器。
+
+与 lambda 联合使用，方法引用可以使语言的构造更紧凑简洁，减少冗余代码。
+
+```java
+    public static void main(String[] args) {
+        List<String> strList = Arrays.asList(new String[] { "a", "c", "b" });
+
+        strList.stream().sorted((s1, s2) -> s1.compareToIgnoreCase(s2)).forEach(s -> System.out.println(s));
+    }
+```
+
+```java
+ public static void main(String[] args) {
+
+        List<String> strList = Arrays.asList(new String[] { "a", "c", "b" });
+
+        strList.stream().sorted(String::compareToIgnoreCase).forEach(System.out::println);
+    }
+/*
+上述程序生成一个Stream流，对流中的字符串进行排序并遍历打印。程序中采用lambda表达式的方式代替匿名类简化了代码，然而代码中两处lambda表达式都仅仅调用的是一个已存在的方法：String.compareToIgnoreCase、System.out.println，这种情况可以用方法引用来简化：
+*/
+```
+
+> java8方法引用有四种形式：
+>
+> - 静态方法引用　　　　　　　：　 　ClassName :: staticMethodName
+> - 构造器引用　　　　　　　　：　 　ClassName :: new
+> - 类的任意对象的实例方法引用：　 　ClassName :: instanceMethodName
+> - 特定对象的实例方法引用　　：　 　object :: instanceMethodName
+>
+> lambda表达式可用方法引用代替的**场景**可以简要概括为：**lambda表达式的主体仅包含一个表达式，且该表达式仅调用了一个已经存在的方法**。方法引用的**通用特性**：**方法引用所使用方法的入参和返回值与lambda表达式实现的函数式接口的入参和返回值一致**。
+>
+> 详细见：https://www.jianshu.com/p/62465b26818f
+
+**Optional 类**：著名的 NullPointerException 是引起系统失败最常见的原因。
+
+很久以前 GoogleGuava 项目引入了 Optional 作为解决空指针异常的一种方式，不赞成代码被 null 检查的代码污染，期望程序员写整洁的代码。
+
+受 GoogleGuava 的鼓励，Optional 现在是 Java8 库的一部分。
+
+### 23.详细说说finnal关键字　
+
+>  出处：http://www.cnblogs.com/dolphin0520/
+>
+> 作者：[Matrix海子](http://www.cnblogs.com/dolphin0520/)　　
+
+在Java中，final关键字可以用来修饰类、方法和变量（包括成员变量和局部变量）。
+
+#### 1.修饰类
+
+　　当用final修饰一个类时，表明这个类不能被继承。也就是说，如果一个类你永远不会让他被继承，就可以用final进行修饰。final类中的成员变量可以根据需要设为final，但是要注意final类中的所有成员方法都会被隐式地指定为final方法。
+
+#### 2.修饰方法：
+
+以防任何继承类修改它的含义
+
+#### 3.修饰变量：
+
+对于一个final变量，如果是基本数据类型的变量，则其数值一旦在初始化之后便不能更改；如果是引用类型的变量，则在对其初始化之后便不能再让其指向另一个对象。
+
+![final修饰变量](images\final修饰变量.jpg)
+
+#### 深入了解：　
+
+在了解了final关键字的基本用法之后，这一节我们来看一下final关键字容易混淆的地方。
+
+##### 1.类的final变量和普通变量有什么区别？
+
+　　当用final作用于类的成员变量时，成员变量（注意是类的成员变量，局部变量只需要保证在使用之前被初始化赋值即可）必须在定义时或者构造器中进行初始化赋值，而且final变量一旦被初始化赋值之后，就不能再被赋值了。
+
+　　那么final变量和普通变量到底有何区别呢？下面请看一个例子：
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        String a = "hello2"; 
+        final String b = "hello";
+        String d = "hello";
+        String c = b + 2; 
+        String e = d + 2;
+        System.out.println((a == c));
+        System.out.println((a == e));
+    }
+}
+```
+
+```
+true
+false
+```
+
+　　大家可以先想一下这道题的输出结果。为什么第一个比较结果为true，而第二个比较结果为fasle。这里面就是final变量和普通变量的区别了，当final变量是基本数据类型以及String类型时，如果在编译期间能知道它的确切值，则编译器会把它当做编译期常量使用。也就是说在用到该final变量的地方，相当于直接访问的这个常量，不需要在运行时确定。这种和C语言中的宏替换有点像。因此在上面的一段代码中，由于变量b被final修饰，因此会被当做编译器常量，所以在使用到b的地方会直接将变量b 替换为它的 值。而对于变量d的访问却需要在运行时通过链接来进行。想必其中的区别大家应该明白了，不过要注意，只有在编译期间能确切知道final变量值的情况下，编译器才会进行这样的优化，比如下面的这段代码就不会进行优化：
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        String a = "hello2"; 
+        final String b = getHello();
+        String c = b + 2; 
+        System.out.println((a == c));
+ 
+    }
+     
+    public static String getHello() {
+        return "hello";
+    }
+}
+```
+
+　　这段代码的输出结果为false。
+
+##### 2.被final修饰的引用变量指向的对象内容可变吗？
+
+　　在上面提到被final修饰的引用变量一旦初始化赋值之后就不能再指向其他的对象，那么该引用变量指向的对象的内容可变吗？看下面这个例子：
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        final MyClass myClass = new MyClass();
+        System.out.println(++myClass.i);
+ 
+    }
+}
+ 
+class MyClass {
+    public int i = 0;
+}
+```
+
+　　这段代码可以顺利编译通过并且有输出结果，输出结果为1。这说明引用变量被final修饰之后，虽然不能再指向其他对象，但是它指向的对象的内容是可变的。
+
+##### 3.final和static
+
+　　很多时候会容易把static和final关键字混淆，static作用于成员变量用来表示只保存一份副本，而final的作用是用来保证变量不可变。看下面这个例子：
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        MyClass myClass1 = new MyClass();
+        MyClass myClass2 = new MyClass();
+        System.out.println(myClass1.i);
+        System.out.println(myClass1.j);
+        System.out.println(myClass2.i);
+        System.out.println(myClass2.j);
+ 
+    }
+}
+ 
+class MyClass {
+    public final double i = Math.random();
+    public static double j = Math.random();
+}
+```
+
+　　运行这段代码就会发现，每次打印的两个j值都是一样的，而i的值却是不同的。从这里就可以知道final和static变量的区别了。
+
+##### 4.匿名内部类中使用的外部局部变量为什么只能是final变量？
+
+### 24.static关键字
+
+> 出处：http://www.cnblogs.com/dolphin0520/
+>
+> 作者：[Matrix海子](http://www.cnblogs.com/dolphin0520/)　
+
+#### 　static关键字的用途
+
+static方法就是没有this的方法。在static方法内部不能调用非静态方法，反过来是可以的。而且可以在没有创建任何对象的前提下，仅仅通过类本身来调用static方法。这实际上正是static方法的主要用途。简而言之：**方便在没有创建对象的情况下来进行调用（方法/变量）。**
+
+##### 1）static方法
+
+static方法一般称作静态方法，由于静态方法不依赖于任何对象就可以进行访问，因此对于静态方法来说，是没有this的，因为它不依附于任何对象，既然都没有对象，就谈不上this了。并且由于这个特性，在静态方法中不能访问类的非静态成员变量和非静态成员方法，因为非静态成员方法/变量都是必须依赖具体的对象才能够被调用。
+
+但是要注意的是，虽然在静态方法中不能访问非静态成员方法和非静态成员变量，但是在非静态成员方法中是可以访问静态成员方法/变量的。
+
+##### 2）static变量
+
+static变量也称作静态变量，静态变量和非静态变量的区别是：静态变量被所有的对象所共享，在内存中只有一个副本，它当且仅当在类初次加载时会被初始化。而非静态变量是对象所拥有的，在创建对象的时候被初始化，存在多个副本，各个对象拥有的副本互不影响。
+
+　　static成员变量的初始化顺序按照定义的顺序进行初始化。
+
+##### 3)static 代码块
+
+static关键字还有一个比较关键的作用就是 用来形成静态代码块以优化程序性能。static块可以置于类中的任何地方，类中可以有多个static块。在类初次被加载的时候，会按照static块的顺序来执行每个static块，并且只会执行一次。
+
+>  静态代码块怎么优化性能的？
+
+为什么说static块可以用来优化程序性能，是因为它的特性:只会在类加载的时候执行一次。下面看个例子:
+
+```java
+class Person{
+    private Date birthDate;
+     
+    public Person(Date birthDate) {
+        this.birthDate = birthDate;
+    }
+     
+    boolean isBornBoomer() {
+        Date startDate = Date.valueOf("1946");
+        Date endDate = Date.valueOf("1964");
+        return birthDate.compareTo(startDate)>=0 && birthDate.compareTo(endDate) < 0;
+    }
+}
+```
+
+　　isBornBoomer是用来这个人是否是1946-1964年出生的，而每次isBornBoomer被调用的时候，都会生成startDate和birthDate两个对象，造成了空间浪费，如果改成这样效率会更好：
+
+```java
+class Person{
+    private Date birthDate;
+    private static Date startDate,endDate;
+    static{
+        startDate = Date.valueOf("1946");
+        endDate = Date.valueOf("1964");
+    }
+     
+    public Person(Date birthDate) {
+        this.birthDate = birthDate;
+    }
+     
+    boolean isBornBoomer() {
+        return birthDate.compareTo(startDate)>=0 && birthDate.compareTo(endDate) < 0;
+    }
+}
+```
+
+　　因此，很多时候会将一些只需要进行一次的初始化操作都放在static代码块中进行。
+
+最后注意，java中static是不允许用来修饰局部变量。
+
+#### 执行顺序问题
+
+##### 1.继承+静态代码块+构造函数
+
+```java
+public class Test extends Base{
+ 
+    static{
+        System.out.println("test static");
+    }
+     
+    public Test(){
+        System.out.println("test constructor");
+    }
+     
+    public static void main(String[] args) {
+        new Test();
+    }
+}
+ 
+class Base{
+     
+    static{
+        System.out.println("base static");
+    }
+     
+    public Base(){
+        System.out.println("base constructor");
+    }
+}
+```
+
+```
+//输出
+base static
+test static
+base constructor
+test constructor
+```
+
+至于为什么是这个结果，我们先不讨论，先来想一下这段代码具体的执行过程，在执行开始，先要寻找到main方法，因为main方法是程序的入口，但是在执行main方法之前，必须先加载Test类，而在加载Test类的时候发现Test类继承自Base类，因此会转去先加载Base类，在加载Base类的时候，发现有static块，便执行了static块。在Base类加载完成之后，便继续加载Test类，然后发现Test类中也有static块，便执行static块。在加载完所需的类之后，便开始执行main方法。在main方法中执行new Test()的时候会先调用父类的构造器，然后再调用自身的构造器。因此，便出现了上面的输出结果。
+
+2.继承+静态代码块+构造函数+成员变量
+
+```java
+public class Test {
+    Person person = new Person("Test");
+    static{
+        System.out.println("test static");
+    }
+     
+    public Test() {
+        System.out.println("test constructor");
+    }
+     
+    public static void main(String[] args) {
+        new MyClass();
+    }
+}
+ 
+class Person{
+    static{
+        System.out.println("person static");
+    }
+    public Person(String str) {
+        System.out.println("person "+str);
+    }
+}
+ 
+ 
+class MyClass extends Test {
+    Person person = new Person("MyClass");
+    static{
+        System.out.println("myclass static");
+    }
+     
+    public MyClass() {
+        System.out.println("myclass constructor");
+    }
+}
+```
+
+```
+//输出
+test static
+myclass static
+person static
+person Test
+test constructor
+person MyClass
+myclass constructor
+```
+
+类似地，我们还是来想一下这段代码的具体执行过程。首先加载Test类，因此会执行Test类中的static块。接着执行new MyClass()，而MyClass类还没有被加载，因此需要加载MyClass类。在加载MyClass类的时候，发现MyClass类继承自Test类，但是由于Test类已经被加载了，所以只需要加载MyClass类，那么就会执行MyClass类的中的static块。在加载完之后，就通过构造器来生成对象。而在生成对象的时候，必须先初始化父类的成员变量，因此会执行Test中的Person person = new Person()，而Person类还没有被加载过，因此会先加载Person类并执行Person类中的static块，接着执行父类的构造器，完成了父类的初始化，然后就来初始化自身了，因此会接着执行MyClass中的Person person = new Person()，最后执行MyClass的构造器。
+
+##### 3.main中没有语句
+
+```java
+public class Test {
+     
+    static{
+        System.out.println("test static 1");
+    }
+    public static void main(String[] args) {
+         
+    }
+     
+    static{
+        System.out.println("test static 2");
+    }
+}
+```
+
+```
+//输出
+test static 1
+test static 2
+```
+
+虽然在main方法中没有任何语句，但是还是会输出，原因上面已经讲述过了。另外，static块可以出现类中的任何地方（只要不是方法内部，记住，任何方法内部都不行），并且执行是按照static块的顺序执行的。
+
+### 25.java的值传递
+
+### 26.内部类
+
+参考：http://www.cnblogs.com/nerxious/archive/2013/01/25/2876489.html
+
+​		https://www.cnblogs.com/dolphin0520/p/3811445.html
+
+泛意义上的内部类一般来说包括这四种：成员内部类、局部内部类、匿名内部类和静态内部类。
+
+#### 成员内部类
+
+成员内部类是最普通的内部类，它的定义为位于另一个类的内部，形如下面的形式：
+
+```java
+class Circle {
+    double radius = 0;
+     
+    public Circle(double radius) {
+        this.radius = radius;
+    }
+     
+    class Draw {     //内部类
+        public void drawSahpe() {
+            System.out.println("drawshape");
+        }
+    }
+}
+```
+
+　　这样看起来，类Draw像是类Circle的一个成员，Circle称为外部类。成员内部类可以无条件访问外部类的所有成员属性和成员方法（包括private成员和静态成员）。
+
+```java
+class Circle {
+    private double radius = 0;
+    public static int count =1;
+    public Circle(double radius) {
+        this.radius = radius;
+    }
+     
+    class Draw {     //内部类
+        public void drawSahpe() {
+            System.out.println(radius);  //外部类的private成员
+            System.out.println(count);   //外部类的静态成员
+        }
+    }
+}
+```
+
+　　不过要注意的是，当成员内部类拥有和外部类同名的成员变量或者方法时，会发生隐藏现象，即默认情况下访问的是成员内部类的成员。如果要访问外部类的同名成员，需要以下面的形式进行访问：
+
+```java
+外部类.this.成员变量
+外部类.this.成员方法
+```
+
+　　虽然成员内部类可以无条件地访问外部类的成员，而外部类想访问成员内部类的成员却不是这么随心所欲了。在外部类中如果要访问成员内部类的成员，必须先创建一个成员内部类的对象，再通过指向这个对象的引用来访问：
+
+```java
+class Circle {
+    private double radius = 0;
+ 
+    public Circle(double radius) {
+        this.radius = radius;
+        getDrawInstance().drawSahpe();   //必须先创建成员内部类的对象，再进行访问
+    }
+     
+    private Draw getDrawInstance() {
+        return new Draw();
+    }
+     
+    class Draw {     //内部类
+        public void drawSahpe() {
+            System.out.println(radius);  //外部类的private成员
+        }
+    }
+}
+```
+
+　　成员内部类是依附外部类而存在的，也就是说，如果要创建成员内部类的对象，前提是必须存在一个外部类的对象。创建成员内部类对象的一般方式如下：
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        //第一种方式：
+        Outter outter = new Outter();
+        Outter.Inner inner = outter.new Inner();  //必须通过Outter对象来创建
+         
+        //第二种方式：
+        Outter.Inner inner1 = outter.getInnerInstance();
+    }
+}
+ 
+class Outter {
+    private Inner inner = null;
+    public Outter() {
+         
+    }
+     
+    public Inner getInnerInstance() {
+        if(inner == null)
+            inner = new Inner();
+        return inner;
+    }
+      
+    class Inner {
+        public Inner() {
+             
+        }
+    }
+}
+```
+
+　　内部类可以拥有private访问权限、protected访问权限、public访问权限及包访问权限。比如上面的例子，如果成员内部类Inner用private修饰，则只能在外部类的内部访问，如果用public修饰，则任何地方都能访问；如果用protected修饰，则只能在同一个包下或者继承外部类的情况下访问；如果是默认访问权限，则只能在同一个包下访问。这一点和外部类有一点不一样，外部类只能被public和包访问两种权限修饰。我个人是这么理解的，由于成员内部类看起来像是外部类的一个成员，所以可以像类的成员一样拥有多种权限修饰。
+
+#### 局部内部类
+
+局部内部类是定义在一个方法或者一个作用域里面的类，它和成员内部类的区别在于局部内部类的访问仅限于方法内或者该作用域内。
+
+```java
+class People{
+    public People() {
+         
+    }
+}
+ 
+class Man{
+    public Man(){
+         
+    }
+     
+    public People getWoman(){
+        class Woman extends People{   //局部内部类
+            int age =0;
+        }
+        return new Woman();
+    }
+}
+```
+
+注意，局部内部类就像是方法里面的一个局部变量一样，是不能有public、protected、private以及static修饰符的。
+
+#### 匿名内部类
+
+匿名内部类也就是没有名字的内部类
+
+正因为没有名字，所以匿名内部类只能使用一次，它通常用来简化代码编写
+
+但使用匿名内部类还有个前提条件：必须继承一个父类或实现一个接口
+
+##### 实例1:不使用匿名内部类来实现抽象方法
+
+```
+abstract class Person {
+    public abstract void eat();
+}
+ 
+class Child extends Person {
+    public void eat() {
+        System.out.println("eat something");
+    }
+}
+ 
+public class Demo {
+    public static void main(String[] args) {
+        Person p = new Child();
+        p.eat();
+    }
+}
+```
+
+**运行结果：**eat something
+
+可以看到，我们用Child继承了Person类，然后实现了Child的一个实例，将其向上转型为Person类的引用
+
+但是，如果此处的Child类只使用一次，那么将其编写为独立的一个类岂不是很麻烦？
+
+这个时候就引入了匿名内部类
+
+##### 实例2：匿名内部类的基本实现
+
+```
+abstract class Person {
+    public abstract void eat();
+}
+ 
+public class Demo {
+    public static void main(String[] args) {
+        Person p = new Person() {
+            public void eat() {
+                System.out.println("eat something");
+            }
+        };
+        p.eat();
+    }
+}
+```
+
+**运行结果：**eat something
+
+可以看到，我们直接将抽象类Person中的方法在大括号中实现了
+
+这样便可以省略一个类的书写
+
+并且，匿名内部类还能用于接口上
+
+##### 实例3：在接口上使用匿名内部类
+
+```
+interface Person {
+    public void eat();
+}
+ 
+public class Demo {
+    public static void main(String[] args) {
+        Person p = new Person() {
+            public void eat() {
+                System.out.println("eat something");
+            }
+        };
+        p.eat();
+    }
+}
+```
+
+**运行结果：**eat something
+
+由上面的例子可以看出，只要一个类是抽象的或是一个接口，那么其子类中的方法都可以使用匿名内部类来实现
+
+最常用的情况就是在多线程的实现上，因为要实现多线程必须继承Thread类或是继承Runnable接口
+
+##### 实例4：Thread类的匿名内部类实现
+
+```
+public class Demo {
+    public static void main(String[] args) {
+        Thread t = new Thread() {
+            public void run() {
+                for (int i = 1; i <= 5; i++) {
+                    System.out.print(i + " ");
+                }
+            }
+        };
+        t.start();
+    }
+}
+```
+
+**运行结果：**1 2 3 4 5
+
+##### 实例5：Runnable接口的匿名内部类实现
+
+```
+public class Demo {
+    public static void main(String[] args) {
+        Runnable r = new Runnable() {
+            public void run() {
+                for (int i = 1; i <= 5; i++) {
+                    System.out.print(i + " ");
+                }
+            }
+        };
+        Thread t = new Thread(r);
+        t.start();
+    }
+}
+```
+
+**运行结果：**1 2 3 4 5
+
+#### 静态内部类
+
+静态内部类也是定义在另一个类里面的类，只不过在类的前面多了一个关键字static。静态内部类是不需要依赖于外部类的，这点和类的静态成员属性有点类似，并且它不能使用外部类的非static成员变量或者方法，这点很好理解，因为在没有外部类的对象的情况下，可以创建静态内部类的对象，如果允许访问外部类的非static成员就会产生矛盾，因为外部类的非static成员必须依附于具体的对象。
+
+#### 为什么成员内部类可以无条件访问外部类的成员？
+
+详情见：https://www.cnblogs.com/dolphin0520/p/3811445.html
+
+#### 为什么局部内部类和匿名内部类只能访问局部final变量？
+
+详情见：https://www.cnblogs.com/dolphin0520/p/3811445.html
+
+#### 内部类使用场景
+
+1.每个内部类都能独立的继承一个接口的实现，所以无论外部类是否已经继承了某个(接口的)实现，对于内部类都没有影响。内部类使得多继承的解决方案变得完整
+
+2.方便将存在一定逻辑关系的类组织在一起，又可以对外界隐藏。
+
+>  最后补充一点知识：
+
+关于成员内部类的继承问题。一般来说，内部类是很少用来作为继承用的。但是当用来继承的话，要注意两点：
+
+　　1）成员内部类的引用方式必须为 Outter.Inner.
+
+　　2）构造器中必须有指向外部类对象的引用，并通过这个引用调用super()。这段代码摘自《Java编程思想》
+
+```java
+class WithInner {
+    class Inner{
+         
+    }
+}
+class InheritInner extends WithInner.Inner {
+      
+    // InheritInner() 是不能通过编译的，一定要加上形参
+    InheritInner(WithInner wi) {
+        wi.super(); //必须有这句调用
+    }
+  
+    public static void main(String[] args) {
+        WithInner wi = new WithInner();
+        InheritInner obj = new InheritInner(wi);
+    }
+}
+```
+
+### 27.JVM的垃圾回收机制
+
+参考：https://www.jianshu.com/p/23f8249886c6
+
+#### 何为垃圾回收？
+
+垃圾回收（Garbage Collection，GC），顾名思义就是释放垃圾占用的空间，防止内存泄露。有效的使用可以使用的内存，对内存堆中已经死亡的或者长时间没有使用的对象进行清除和回收。
+
+#### 垃圾判断的算法？
+
+##### 2.1 引用计数法
+
+给每个对象添加一个计数器，当有地方引用该对象时计数器加1，当引用失效时计数器减1。用对象计数器是否为0来判断对象是否可被回收。缺点：**无法解决循环引用的问题**。
+
+那是什么原因导致我们最终放弃了引用计数算法呢？看下面的例子。
+
+```java
+public class ReferenceCountingGC {
+
+  public Object instance;
+
+  public ReferenceCountingGC(String name) {
+  }
+
+  public static void testGC(){
+
+    ReferenceCountingGC a = new ReferenceCountingGC("objA");
+    ReferenceCountingGC b = new ReferenceCountingGC("objB");
+
+    a.instance = b;
+    b.instance = a;
+
+    a = null;
+    b = null;
+  }
+}
+```
+
+我们可以看到，最后这2个对象已经不可能再被访问了，但由于他们相互引用着对方，导致它们的引用计数永远都不会为0，通过引用计数算法，也就永远无法通知GC收集器回收它们。
+
+##### 2.2 可达性分析算法
+
+通过`GC ROOT`的对象作为搜索起始点，通过引用向下搜索，所走过的路径称为引用链。通过对象是否有到达引用链的路径来判断对象是否可被回收（可作为`GC ROOT`的对象：虚拟机栈中引用的对象，方法区中类静态属性引用的对象，方法区中常量引用的对象，本地方法栈中`JNI`引用的对象）。
+
+通过可达性算法，成功解决了引用计数所无法解决的循环依赖问题，只要你无法与`GC Root`建立直接或间接的连接，系统就会判定你为可回收对象。那这样就引申出了另一个问题，哪些属于GC Root。
+
+Java内存区域中可以作为`GC ROOT`的对象：
+
+- **虚拟机栈中引用的对象**
+
+```csharp
+public class StackLocalParameter {
+
+  public StackLocalParameter(String name) {}
+
+  public static void testGC() {
+    StackLocalParameter s = new StackLocalParameter("localParameter");
+    s = null;
+  }
+}
+```
+
+> 此时的s，即为GC Root，当s置空时，localParameter对象也断掉了与GC Root的引用链，将被回收。
+
+- **方法区中类静态属性引用的对象**
+
+```csharp
+public class MethodAreaStaicProperties {
+
+  public static MethodAreaStaicProperties m;
+
+  public MethodAreaStaicProperties(String name) {}
+
+  public static void testGC(){
+    MethodAreaStaicProperties s = new MethodAreaStaicProperties("properties");
+    s.m = new MethodAreaStaicProperties("parameter");
+    s = null;
+  }
+}
+```
+
+> 此时的s，即为GC Root，s置为null，经过GC后，s所指向的properties对象由于无法与GC Root建立关系被回收。而m作为类的静态属性，也属于GC Root，parameter 对象依然与GC root建立着连接，所以此时parameter对象并不会被回收。
+
+- **方法区中常量引用的对象**
+
+```java
+public class MethodAreaStaicProperties {
+
+  public static final MethodAreaStaicProperties m = MethodAreaStaicProperties("final");
+
+  public MethodAreaStaicProperties(String name) {}
+
+  public static void testGC() {
+    MethodAreaStaicProperties s = new MethodAreaStaicProperties("staticProperties");
+    s = null;
+  }
+}
+```
+
+> m即为方法区中的常量引用，也为GC Root，s置为null后，final对象也不会因没有与GC Root建立联系而被回收。
+
+- **本地方法栈中引用的对象**
+
+任何native接口都会使用某种本地方法栈，实现的本地方法接口是使用C连接模型的话，那么它的本地方法栈就是C栈。当线程调用Java方法时，虚拟机会创建一个新的栈帧并压入Java栈。然而当它调用的是本地方法时，虚拟机会保持Java栈不变，不再在线程的Java栈中压入新的帧，虚拟机只是简单地动态连接并直接调用指定的本地方法。
+
+![本地方法栈](images\本地方法栈.webp)
+
+#### 垃圾回收算法？
+
+#####  标记-清除算法
+
+标记清除算法（Mark-Sweep）是最基础的一种垃圾回收算法，它分为2部分，先把内存区域中的这些对象进行标记，哪些属于可回收标记出来，然后把这些垃圾拎出来清理掉。就像上图一样，清理掉的垃圾就变成未使用的内存区域，等待被再次使用。但它存在一个很大的问题，那就是**内存碎片**。
+
+上图中等方块的假设是2M，小一些的是1M，大一些的是4M。等我们回收完，内存就会切成了很多段。我们知道开辟内存空间时，需要的是连续的内存区域，这时候我们需要一个2M的内存区域，其中有2个1M是没法用的。这样就导致，其实我们本身还有这么多的内存的，但却用不了。
+
+![标记清除算法](images\标记清除算法.webp)
+
+##### 复制算法
+
+复制算法（Copying）是在标记清除算法基础上演化而来，解决标记清除算法的内存碎片问题。它将可用内存按容量划分为大小相等的两块，每次只使用其中的一块。当这一块的内存用完了，就将还存活着的对象复制到另外一块上面，然后再把已使用过的内存空间一次清理掉。保证了内存的连续可用，内存分配时也就不用考虑内存碎片等复杂情况。复制算法暴露了另一个问题，例如硬盘本来有500G，但却只能用200G，代价实在太高。
+
+![复制算法](images\复制算法.webp)
+
+##### 标记-整理算法
+
+标记-整理算法标记过程仍然与标记-清除算法一样，但后续步骤不是直接对可回收对象进行清理，而是让所有存活的对象都向一端移动，再清理掉端边界以外的内存区域。
+
+标记整理算法解决了内存碎片的问题，也规避了复制算法只能利用一半内存区域的弊端。标记整理算法对内存变动更频繁，需要整理所有存活对象的引用地址，在效率上比复制算法要差很多。一般是把Java堆分为**新生代**和**老年代**，这样就可以根据各个年代的特点采用最适当的收集算法。
+
+![标记整理算法](images\标记整理算法.webp)
+
+##### 分代收集算法
+
+分代收集算法分代收集算法严格来说并不是一种思想或理论，而是融合上述3种基础的算法思想，而产生的针对不同情况所采用不同算法的一套组合拳，根据对象存活周期的不同将内存划分为几块。
+
+- 在新生代中，每次垃圾收集时都发现有大批对象死去，只有少量存活，那就选用**复制算法**，只需要付出少量存活对象的复制成本就可以完成收集。
+- 在老年代中，因为对象存活率高、没有额外空间对它进行分配担保，就必须使用**标记-清理算法**或者**标记-整理算法**来进行回收。
+
+#### 内存区域与回收策略
+
+#####  对象优先在Eden分配
+
+大多数情况下，对象会在新生代`Eden`区中分配。当Eden区没有足够空间进行分配时，虚拟机会发起一次 `Minor GC`。Minor GC相比`Major GC`更频繁，回收速度也更快。通过Minor GC之后，Eden区中绝大部分对象会被回收，而那些存活对象，将会送到`Survivor`的From区（**若From区空间不够，则直接进入Old区**） 。
+
+##### Survivor区
+
+Survivor区相当于是Eden区和Old区的一个缓冲，类似于我们交通灯中的黄灯。Survivor又分为2个区，一个是From区，一个是To区。每次执行`Minor GC`，会将Eden区中存活的对象放到Survivor的From区，而在From区中，仍存活的对象会根据他们的年龄值来决定去向。（`From Survivor`和`To Survivor`的逻辑关系会发生颠倒： From变To ， To变From，目的是保证有连续的空间存放对方，避免碎片化的发生）
+
+##### Survivor区存在的意义
+
+如果没有Survivor区，Eden区每进行一次`Minor GC`，存活的对象就会被送到老年代，老年代很快就会被填满。而有很多对象虽然一次`Minor GC`没有消灭，但其实也并不会蹦跶多久，或许第二次，第三次就需要被清除。这时候移入老年区，很明显不是一个明智的决定。所以，**Survivor的存在意义就是减少被送到老年代的对象，进而减少`Major GC`的发生**。Survivor的预筛选保证，**只有经历16次`Minor GC`还能在新生代中存活的对象，才会被送到老年代**。
+
+##### 大对象直接进入老年代
+
+所谓大对象是指，需要大量连续内存空间的Java对象，最典型的大对象就是那种很长的字符串以及数组。大对象对虚拟机的内存分配来说就是一个坏消息，经常出现大对象容易导致内存还有不少空间时就提前触发垃圾收集以获取足够的连续空间来 “安置” 它们。
+
+虚拟机提供了一个`XX:PretenureSizeThreshold`参数，令大于这个设置值的对象直接在老年代分配，这样做的目的是避免在Eden区及两个Survivor区之间发生大量的内存复制（新生代采用的是复制算法）。
+
+##### 长期存活的对象将进入老年代
+
+虚拟机给每个对象定义了一个对象年龄（Age）计数器，如果对象在Eden出生并经过第一次`Minor GC`后仍然存活，并且能被Survivor容纳的话，将被移动到Survivor空间中（正常情况下对象会不断的在Survivor的From与To区之间移动），并且对象年龄设为1。对象在Survivor区中每经历一次Minor GC，年龄就增加1岁，当它的年龄增加到一定程度（默认15岁），就将会晋升到老年代中。对象晋升老年代的年龄阈值，可以通过参数 `XX:MaxPretenuringThreshold` 设置。
+
+##### 动态对象年龄判定
+
+为了能更好地适应不同程度的内存状况，虚拟机并不是永远地要求对象的年龄必须达到 `MaxPretenuringThreshold`才能晋升老年代，如果Survivor空间中相同年龄所有对象大小的总和大于Survivor空间的一半，年龄大于或等于改年龄的对象就可以直接进入老年代，无需等到`MaxPretenuringThreshold`中要求的年龄。
+
+#### 垃圾回收器
+
+参考：https://baijiahao.baidu.com/s?id=1673186429952651208&wfr=spider&for=pc
+
+![各个垃圾回收器](images\各个垃圾回收器.jpeg)
+
+最常用的几种组合：
+
+1. Serial/Serial Old
+2. ParNew/Serial Old：与上边相比，只是比年轻代多了多线程垃圾回收而已
+3. ParNew/CMS：当下比较高效的组合
+4. Parallel Scavenge/Parallel Old：自动管理的组合
+5. G1：最先进的收集器，但是需要JDK1.7update14以上
+
+##### **Serial/SerialOld**
+
+可以看到新生代或老年代在进行垃圾回收时都会暂停所有的用户线程，图中的**SafePoint**表示线程能够安全暂停的时机，即JVM要进行垃圾回收时，不可能立马就停止所有的线程，那样是非常危险的，必须要确保线程处于安全点才能暂停它。这里先有这个概念，细节在下一篇进行阐述。
+
+该组合可以通过-XX:+UseSerialGC参数开启。
+
+![Serial_SerialOld](images\Serial_SerialOld.jpeg)
+
+##### **ParNew**
+
+该收集器就是**Serial**的多线程版本，但在单核处理器环境中表现还不如Serial（涉及线程的切换）。它默认开启的收集线程数与处理器核心数量相同，在处理器核心非常多的环境中，可以使用-XX：ParallelGCThreads参数来限制垃圾收集的线程数。
+
+![ParNew](images\ParNew.jpeg)
+
+另外需要注意的是它是除了**Serial**之外唯一可以与**CMS**配合的垃圾收集器，在激活**CMS**后（使用-XX：+UseConcMarkSweepGC选项）的默认新生代收集器，也可以使用-XX:+/-UseParNewGC选项来强制指定或者禁用它，在JDK9以后ParNew成为了CMS的一部分。
+
+##### **Parallel Scavenge/ParallelOld**
+
+**Parallel Scavenge**与其它垃圾收集器不同，其它的是追求尽可能小的GC停顿时间，而它主要关注吞吐量，所谓吞吐量就是**代码运行时间**/（**代码运行时间**+**垃圾回收时间**）。比如虚拟机运行100分钟，垃圾回收耗时1分钟，那么吞吐量就是99%。但是这款收集器在JDK1.6之前比较尴尬，没有与之对应的并行的老年代收集器，只能采用SerialOld老年代收集器，使得表现比不上PareNew+CMS的组合。直到ParallelOld出现后，ParallelScavenge才能真正的展现它吞吐量的优势。
+
+![Parallel Scavenge_ParallelOld](images\Parallel Scavenge_ParallelOld.jpeg)
+
+ParallelScavenge有以下几个重要的参数：
+
+-XX:MaxGCPauseMillis：该参数的值是一个大于0的毫秒数，收集器尽量保证GC停顿时间不超过该值，但是不要天真的认为该值越小越好。该值设置的太小会导致每次GC的回收率降低，垃圾堆积，GC发生的越来越频繁。比如原先需要100ms收集500M空间，现在设置为50ms，那么可能就只能回收300M或者更小的垃圾。
+
+-XX:GCTimeRatio：控制垃圾回收时间比率。比如允许最大垃圾回收时间占总时间的5%，那么需要将该值设置为19（公式是1/(1 + 19)）。
+
+-XX:+UseAdaptiveSizePolicy：这个参数激活后，就不再需要我们手动设定新生代各区（Eden、from、to）的比例（-XX:SurvivorRatio），晋升老年代对象的大小（-XX:PretenureSizeThreshold），虚拟机会监控运行时的状态，进行动态的调整，这种方式称为垃圾收集的**自适应调节策略**（GC Ergonomics）。
+
+##### **CMS**
+
+CMS（Concurrent Mark Sweep）是第一款并发垃圾收集器，并发是指垃圾收集可以和用户线程同时进行。同时它也是唯一采用**标记清除**算法对老年代进行回收的垃圾回收器。
+
+- 初始标记：STW，只标记与GC Roots直接关联的对象
+
+- 并发标记：和用户线程同时运行，进行可达性分析
+- 重新标记：STW，暂停用户线程，修正上一阶段变动的对象
+- 并发清除：最后是并发的清除掉垃圾
+
+![CMS](images\CMS.jpeg)
+
+从上面我们可以发现CMS的整个过程中只有**初始标记**和**重新标记**是需要暂停用户线程的，而初始标记只是标记与GCRoots直接关联的对象，所以耗时只和GCRoots的数量有关，非常快；重新标记的耗时会比初始标记略长，但也远远比并发标记用时短，所以CMS就是通过细分GC的阶段来降低GC的停顿时间。
+
+你可能会好奇为什么需要**重新标记**并且暂停所有用户线程，因为在与用户线程并发执行的同时肯定会存在**引用变动**的情况，而要处理这个问题，都是必须要暂停用户线程的，关于引用变动的处理在下一篇会详细分析。
+
+CMS的缺点：
+
+1. CPU敏感：虽然**并发标记**和**并发标记**是和用户线程并发执行的，但是也因此占用了系统的资源，导致应用程序忽然变慢，降低吞吐量。CMS默认启动的线程数是（处理器核心数+3）/4，因此当核心数量大于等于4时，GC占用资源不超过25%，但核心数小于4时，就会占用大量系统资源。
+
+2. 大量的内存碎片：因为CMS是使用**标记清除**算法实现垃圾回收，所以会产生大量的内存碎片。为了避免这个问题，CMS采用了一个折中的办法，即提供一个-XX:+UseCMS-CompactAtFullCollection参数，该参数默认开启，控制CMS在进行FullGC的同时进行空间整理，但这样又会导致停顿时间加长，所以还提供了-XX:CMSFullGCsBefore-Compaction参数，控制CMS在进行了多少次不带整理的FullGC后进行一次带整理的FullGC，默认值是0，即每次FullGC都会整理，该参数JDK9后被废弃。
+3. 浮动垃圾：因为最终清除的过程也是和用户线程并发执行的，因此这个过程中必然会产生新的垃圾，这一部分垃圾需要预留空间来存放，等待下一次GC的时候再清理，因此会浪费一部分空间。在JDK5的默认配置下，当老年代使用空间超过68%时就会进行GC，到JDK6时，这个阈值就提高到了92%，另外也可以通过-XX:CMSInitiatingOccu-pancyFraction参数控制。但该值越高，那么并发清理过程中可使用的内存就越小，当放不下时，就会出现一次**Concurrent Mode Failure**，这时候虚拟机就会冻结线程并采用SerialOld进行垃圾回收，导致停顿时间变得更长。
+
+##### **Garbage First**
+
+G1是目前最前沿且可商用的垃圾收集器，另外还有ZGC等更为前沿的垃圾收集器还处于试验阶段。它与其它垃圾收集器不同的是，他将堆空间**化整为零**，将内存区域划分为多个大小相等的独立区域（Region），使得它可以回收堆中的任何一个区域，而不是像其它的垃圾收集器要么只能回收**新生代**，要么只能回收**老年代**。但不是说G1就没有新生代和老年代了，它的每个Region都可以根据需要扮演Eden、Survivor或老年代，垃圾收集器也会针对不同角色的Region采用不同的策略去处理。
+
+每个Region的大小可以通过-XX:G1HeapRegionSize设定，取值范围为1M~32M，且必须为2的N次幂。超过单个Region一半容量的对象即为大对象，而对于超过整个Region的对象将会使用多个连续的Humongous空间存放，G1大多数情况下都把Humongous作为老年代一部分看待。
+
+![G1](images\G1.jpeg)
+
+G1的运行过程如上，它也包含了以下4个步骤：
+
+- 初始标记：STW，也是只标记GC Roots直接关联的对象，并修改TAMS的指针值（G1为每一个Region设计了两个名为TAMS（Top at Mark Start）的指针，把Region中的一部分空间划分出来用于并发回收过程中的新对象分配，并发回收时新分配的对象地址都必须要在这两个指针位置以上，垃圾回收时也不会回收这部分空间），这个过程耗时很短，而且是借用进行 Minor GC 的时候同步完成的，所以 G1 收集器在这个阶段实际并没有额外的停顿。
+- 并发标记：可达性分析找出要回收的对象，在对象扫描完成后，由于是与用户线程并发执行的，所以存在引用变动的对象，这部分对象会由SATB算法来解决（原始快照，下一篇详细分析）。
+- 最终标记：STW，处理并发阶段遗留的少量遗留的SATB记录。
+- 筛选回收：根据用户设定的-XX:MaxGCPauseMillis最大GC停顿时间对Region进行排序，并回收价值最大的Region，尽量保证满足参数设定的值（该值效果和Parallel Scavenge部分讲解的是一样的）。这里的回收算法就是讲存活的对象**复制**到空的Region中，即G1局部Region之间采用的是**复制算法**，而整体上采用的是**标记整理算法**。G1适合上百G的堆空间回收，与CMS的权衡在6~8G之间，较大的堆内存才能凸显G1的优势，可以通过-XX:+UseG1GC参数开启。
+
+补充：
+
+G1跟踪各个region里面的垃圾堆积的价值（回收后所获得的空间大小以及回收所需时间长短的经验值），在后台维护一张优先列表，每次根据允许的收集时间，优先回收价值最大的region，这种思路：在指定的时间内，扫描部分最有价值的region（而不是扫描整个堆内存），并回收，做到尽可能的在有限的时间内获取尽可能高的收集效率。
+
+**优点：**
+
+1. 停顿时间可以预测：我们指定时间，在指定时间内只回收部分价值最大的空间，而CMS需要扫描整个年老代，无法预测停顿时间
+2. 无内存碎片：垃圾回收后会整合空间，CMS采用"标记-清理"算法，存在内存碎片
+3. 筛选回收阶段：
+
+- 由于只回收部分region，所以STW时间我们可控，所以不需要与用户线程并发争抢CPU资源，而CMS并发清理需要占据一部分的CPU，会降低吞吐量。
+- 由于STW，所以不会产生"浮动垃圾"（即CMS在并发清理阶段产生的无法回收的垃圾）
+
+**缺点：**
+
+​	存在诸多STW的情况：
+
+标记阶段停顿分析
+
+- 初始标记阶段：初始标记阶段是指从GC Roots出发标记全部直接子节点的过程，该阶段是STW的。由于GC Roots数量不多，通常该阶段耗时非常短。
+- 并发标记阶段：并发标记阶段是指从GC Roots开始对堆中对象进行可达性分析，找出存活对象。该阶段是并发的，即应用线程和GC线程可以同时活动。并发标记耗时相对长很多，但因为不是STW，所以我们不太关心该阶段耗时的长短。
+- 再标记阶段：重新标记那些在并发标记阶段发生变化的对象。该阶段是STW的。
+
+清理阶段停顿分析
+
+- 清理阶段清点出有存活对象的分区和没有存活对象的分区，该阶段不会清理垃圾对象，也不会执行存活对象的复制。该阶段是STW的。
+
+复制阶段停顿分析
+
+- 复制算法中的转移阶段需要分配新内存和复制对象的成员变量。转移阶段是STW的，其中内存分配通常耗时非常短，但对象成员变量的复制耗时有可能较长，这是因为复制耗时与存活对象数量与对象复杂度成正比。对象越复杂，复制耗时越长。
+
+![img](images\笑脸.png)**！！！！G1停顿时间的瓶颈主要是标记-复制中的转移阶段STW。(为什么转移阶段不能和标记阶段一样并发执行呢？主要是G1未能解决转移过程中准确定位对象地址的问题。)**
+
+##### ZGC
+
+HotSpot的垃圾收集器，有几种不同的标记实现方案。
+
+- 把标记直接记录在对象头上（Serial 收集器）。
+- 把标记记录在于对象相互独立的数据结构上（G1、Shenandoah使用了一种相当于堆内存的1/64大小的，称为BitMap的结构来记录标记信息）。
+- ZGC染色指针直接把标记信息记载引用对象的指针上。
+
+​	**为了实现，上述的并发转移，引入了染色指针技术，即第三种方案。**
+
+> ​	着色指针是一种将信息存储在指针中的技术。
+>
+> 当应用程序创建对象时，首先在堆空间申请一个虚拟地址，但该虚拟地址并不会映射到真正的物理地址。ZGC同时会为该对象在M0、M1和Remapped地址空间分别申请一个虚拟地址，且这三个虚拟地址对应同一个物理地址，但这三个空间在同一时间有且只有一个空间有效。ZGC之所以设置三个虚拟地址空间，是因为它使用“空间换时间”思想，去降低GC停顿时间。“空间换时间”中的空间是虚拟空间，而不是真正的物理空间.
+>
+> 通过这些标志虚拟机就可以直接从指针中看到器引用对象的三色标记状态（Marked0、Marked1）、是否进入了重分配集（是否被移动过——Remapped）、是否只能通过finalize()方法才能被访问到(Finalizable)
+> ![染色指针技术](images\染色指针技术.png)
+
+- **初始化**：ZGC初始化之后，整个内存空间的地址视图被设置为Remapped。程序正常运行，在内存中分配对象，满足一定条件后垃圾回收启动，此时进入标记阶段。
+- **并发标记阶段**：第一次进入标记阶段时视图为M0，如果对象被GC标记线程或者应用线程访问过，那么就将对象的地址视图从Remapped调整为M0。所以，在标记阶段结束之后，对象的地址要么是M0视图，要么是Remapped。如果对象的地址是M0视图，那么说明对象是活跃的；如果对象的地址是Remapped视图，说明对象是不活跃的。（详细的说，初始标记后是M0，并发标记为M1）
+- **并发转移阶段**：标记结束后就进入转移阶段，此时地址视图再次被设置为Remapped。如果对象被GC转移线程或者应用线程访问过，那么就将对象的地址视图从M0调整为Remapped。
+
+![zgc](images\zgc.png)
+
+### 28.双亲委派机制？
+
+参考：
+
+https://zhuanlan.zhihu.com/p/185612299
+
+https://www.jianshu.com/p/09f73af48a98
+
+双亲委派机制时JVM类加载的默认使用的机制，其原理是:当一个类加载器收到类加载任务时，会先交给自己的父加载器去完成，因此最终加载任务都会传递到最顶层的BootstrapClassLoader，只有当父加载器无法完成加载任务时，才会尝试自己来加载。按照由父级到子集的顺序，类加载器主要包含以下几个：
+
+- BootstrapClassLoader（启动类加载器）:主要负责加载核心的类库(java.lang.*等),JVM_HOME/lib目录下的，构造ExtClassLoader和APPClassLoader。
+- ExtClassLoader (拓展类加载器)：它负责将`< Java_Runtime_Home >/lib/ext`或者由系统变量 `java.ext.dir`指定位置中的类库加载到内存中。开发者可以直接使用标准扩展类加载器。
+- AppClassLoader（系统类加载器）:主要负责加载应用程序的主函数类，它负责将系统类路径（`CLASSPATH`）中指定的类库加载到内存中。开发者可以直接使用系统类加载器。
+- 自定义类加载器:主要负责加载应用程序的主函数类
+
+#### 优点：
+
+一个可以避免类的重复加载，另外也避免了java的核心API被篡改。
+
+#### 双亲委派机制有什么缺陷？
+
+局限性就是：父级加载器无法加载子级类加载器路径中的类，如果基础的类调用了用户类怎么办？
+
+最典型的就是，这就引申出来我们对双亲委派机制的缺陷的讨论，接口：java.sql.Driver，定义在java.sql包中，包所在的位置是：jdk\jre\lib\rt.jar中，java.sql包中还提供了其它相应的类和接口比如管理驱动的类:DriverManager类，很明显java.sql包是由BootstrapClassloader加载器加载的；而接口的实现类com.mysql.jdbc.Driver是由第三方实现的类库，由AppClassLoader加载器进行加载的，我们的问题是DriverManager再获取链接的时候必然要加载到com.mysql.jdbc.Driver类，这就是由BootstrapClassloader加载的类使用了由AppClassLoader加载的类，很明显和双亲委托机制的原理相悖，那它是怎么解决这个问题的？
+
+> 简单讲就是：在启动类加载器中有方法获取应用程序类加载器，该方法就是**线程上下文类加载器**。**可以通过Thread.setContextClassLoaser()方法设置，如果不特殊设置会从父类继承，一般默认使用的是应用程序类加载器**
+
+> 补充：java本身有一套资源管理服务JNDI，是放置在rt.jar中，由启动类加载器加载的。JNDI是 Java 命名与目录接口（Java Naming and Directory Interface）：简单讲就是**把资源取个名字，再根据名字来找资源。**
+>
+> 
+
+##### 详解：
+
+```java
+   // 1.加载数据访问驱动
+        Class.forName("com.mysql.jdbc.Driver");
+        //2.连接到数据"库"上去
+        Connection conn= DriverManager.getConnection("jdbc:mysql://localhost:3306/mydb?characterEncoding=GBK", "root", "");
+```
+
+核心就是这句Class.forName()触发了mysql驱动的加载，我们看下mysql对Driver接口的实现：
+
+```java
+public class Driver extends NonRegisteringDriver implements java.sql.Driver {
+    public Driver() throws SQLException {
+    }
+
+    static {
+        try {
+            DriverManager.registerDriver(new Driver());
+        } catch (SQLException var1) {
+            throw new RuntimeException("Can't register driver!");
+        }
+    }
+}
+```
+
+可以看到，Class.forName()其实触发了静态代码块，然后向DriverManager中注册了一个mysql的Driver实现。
+ 这个时候，我们通过DriverManager去获取connection的时候只要遍历当前所有Driver实现，然后选择一个建立连接就可以了。
+
+Driver接口是java提供操作数据库的（具体实现由厂商实现），DriverManager类是管理这个Driver的实现。
+
+```java
+public interface Driver {
+
+   
+    Connection connect(String url, java.util.Properties info)
+        throws SQLException;
+    boolean acceptsURL(String url) throws SQLException;
+    DriverPropertyInfo[] getPropertyInfo(String url, java.util.Properties info)
+                         throws SQLException;
+    int getMajorVersion();
+    int getMinorVersion();
+    boolean jdbcCompliant();
+    public Logger getParentLogger() throws SQLFeatureNotSupportedException;
+}
+```
+
+```java
+public class DriverManager {
+
+
+    // List of registered JDBC drivers 这里用来保存所有Driver的具体实现
+    private final static CopyOnWriteArrayList<DriverInfo> registeredDrivers = new CopyOnWriteArrayList<>();
+    public static synchronized void registerDriver(java.sql.Driver driver)
+        throws SQLException {
+
+        registerDriver(driver, null);
+    }
+
+    public static synchronized void registerDriver(java.sql.Driver driver,
+            DriverAction da)
+        throws SQLException {
+
+        /* Register the driver if it has not already been added to our list */
+        if(driver != null) {
+            registeredDrivers.addIfAbsent(new DriverInfo(driver, da));
+        } else {
+            // This is for compatibility with the original DriverManager
+            throw new NullPointerException();
+        }
+
+        println("registerDriver: " + driver);
+
+    }
+    
+
+}
+```
+
+##### 如何打破双亲委派机制？
+
+在JDBC4.0以后，开始支持使用spi(SPI的全名为Service Provider Interface)的方式来注册这个Driver，具体做法就是在mysql的jar包中的META-INF/services/java.sql.Driver 文件中指明当前使用的Driver是哪个，然后使用的时候就直接这样就可以了：
+
+```bash
+ Connection conn= DriverManager.getConnection("jdbc:mysql://localhost:3306/mydb?characterEncoding=GBK", "root", "");
+```
+
+可以看到这里直接获取连接，省去了上面的Class.forName()注册过程。
+ 现在，我们分析下看使用了这种spi服务的模式原本的过程是怎样的:
+
+- 第一，从META-INF/services/java.sql.Driver文件中获取具体的实现类名“com.mysql.jdbc.Driver”
+- 第二，加载这个类，这里肯定只能用class.forName("com.mysql.jdbc.Driver")来加载
+
+好了，问题来了，Class.forName()加载用的是调用者的Classloader，这个调用者DriverManager是在rt.jar中的，ClassLoader是启动类加载器，而com.mysql.jdbc.Driver肯定不在<JAVA_HOME>/lib下，所以肯定是无法加载mysql中的这个类的。这就是双亲委派模型的局限性了，父级加载器无法加载子级类加载器路径中的类。
+
+那么，这个问题如何解决呢？按照目前情况来分析，这个mysql的drvier只有应用类加载器能加载，那么我们只要在启动类加载器中有方法获取应用程序类加载器，然后通过它去加载就可以了。这就是所谓的线程上下文加载器。
+ **线程上下文类加载器可以通过Thread.setContextClassLoaser()方法设置，如果不特殊设置会从父类继承，一般默认使用的是应用程序类加载器**
+
+**很明显，线程上下文类加载器让父级类加载器能通过调用子级类加载器来加载类，这打破了双亲委派模型的原则**
+
+##### 上下文类加载器的使用？
+
+现在我们看下DriverManager是如何使用线程上下文类加载器去加载第三方jar包中的Driver类的。
+
+```java
+public class DriverManager {
+    static {
+        loadInitialDrivers();
+        println("JDBC DriverManager initialized");
+    }
+    private static void loadInitialDrivers() {
+        //省略代码
+        //这里就是查找各个sql厂商在自己的jar包中通过spi注册的驱动
+        ServiceLoader<Driver> loadedDrivers = ServiceLoader.load(Driver.class);
+        Iterator<Driver> driversIterator = loadedDrivers.iterator();
+        try{
+             while(driversIterator.hasNext()) {
+                driversIterator.next();
+             }
+        } catch(Throwable t) {
+                // Do nothing
+        }
+
+        //省略代码
+    }
+}
+```
+
+使用时，我们直接调用DriverManager.getConn()方法自然会触发静态代码块的执行，开始加载驱动
+然后我们看下ServiceLoader.load()的具体实现：
+
+```java
+    public static <S> ServiceLoader<S> load(Class<S> service) {
+        //拿到线程上下文类加载器，然后构造了一个ServiceLoader,后续的具体查找过程
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        return ServiceLoader.load(service, cl);
+    }
+    public static <S> ServiceLoader<S> load(Class<S> service,
+                                            ClassLoader loader){
+        return new ServiceLoader<>(service, loader);
+    }
+```
+
+接下来，DriverManager的loadInitialDrivers()方法中有一句**driversIterator.next();**,它的具体实现如下：
+
+```java
+private S nextService() {
+            if (!hasNextService())
+                throw new NoSuchElementException();
+            String cn = nextName;
+            nextName = null;
+            Class<?> c = null;
+            try {
+                //此处的cn就是产商在META-INF/services/java.sql.Driver文件中注册的Driver具体实现类的名称
+               //此处的loader就是之前构造ServiceLoader时传进去的线程上下文类加载器
+                c = Class.forName(cn, false, loader);
+            } catch (ClassNotFoundException x) {
+                fail(service,
+                     "Provider " + cn + " not found");
+            }
+         //省略部分代码
+        }
+```
+
+​	现在，我们成功的做到了通过线程上下文类加载器拿到了应用程序类加载器（或者自定义的然后塞到线程上下文中的），同时我们也查找到了厂商在子级的jar包中注册的驱动具体实现类名，这样我们就可以成功的在rt.jar包中的DriverManager中成功的加载了放在第三方应用程序包中的类了。
+
+### 29.进程和线程
+
+原文：
+
+http://www.cnblogs.com/dolphin0520/p/3913517.html
+
+#### 概念问题：
+
+进程是java程序的一次动态执行过程，是系统运行程序的基本单位
+
+线程是比进程更小的进行单位，一个进程在执行的过程中可以产生多个线程。并且同类的线程共享方法区和堆，因此系统在产生一个线程或者在多个线程之间切换的时候，消耗比较小。
+
+#### Java中如何创建线程
+
+在java中如果要创建线程的话，一般有两种方式：1）继承Thread类；2）实现Runnable接口。
+
+##### 　　1.继承Thread类
+
+　　继承Thread类的话，必须重写run方法，在run方法中定义需要执行的任务。
+
+```java
+class MyThread extends Thread{
+    private static int num = 0;
+     
+    public MyThread(){
+        num++;
+    }
+     
+    @Override
+    public void run() {
+        System.out.println("主动创建的第"+num+"个线程");
+    }
+}
+```
+
+ 　创建好了自己的线程类之后，就可以创建线程对象了，然后通过start()方法去启动线程。注意，不是调用run()方法启动线程，run方法中只是定义需要执行的任务，如果调用run方法，即相当于在主线程中执行run方法，跟普通的方法调用没有任何区别，此时并不会创建一个新的线程来执行定义的任务。
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        MyThread thread = new MyThread();
+        thread.start();
+    }
+}
+ 
+ 
+class MyThread extends Thread{
+    private static int num = 0;
+     
+    public MyThread(){
+        num++;
+    }
+     
+    @Override
+    public void run() {
+        System.out.println("主动创建的第"+num+"个线程");
+    }
+}
+```
+
+ 　在上面代码中，通过调用start()方法，就会创建一个新的线程了。为了分清start()方法调用和run()方法调用的区别，请看下面一个例子：
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        System.out.println("主线程ID:"+Thread.currentThread().getId());
+        MyThread thread1 = new MyThread("thread1");
+        thread1.start();
+        MyThread thread2 = new MyThread("thread2");
+        thread2.run();
+    }
+}
+ 
+ 
+class MyThread extends Thread{
+    private String name;
+     
+    public MyThread(String name){
+        this.name = name;
+    }
+     
+    @Override
+    public void run() {
+        System.out.println("name:"+name+" 子线程ID:"+Thread.currentThread().getId());
+    }
+}
+```
+
+从输出结果可以得出以下结论：
+
+　　1）thread1和thread2的线程ID不同，thread2和主线程ID相同，说明通过run方法调用并不会创建新的线程，而是在主线程中直接运行run方法，跟普通的方法调用没有任何区别；
+
+　　2）虽然thread1的start方法调用在thread2的run方法前面调用，但是先输出的是thread2的run方法调用的相关信息，说明新线程创建的过程不会阻塞主线程的后续执行。
+
+![创建线程](images\创建线程.jpg)
+
+##### 2.实现Runnable接口
+
+　　在Java中创建线程除了继承Thread类之外，还可以通过实现Runnable接口来实现类似的功能。实现Runnable接口必须重写其run方法。
+
+```java
+public class Test {
+    public static void main(String[] args)  {
+        System.out.println("主线程ID："+Thread.currentThread().getId());
+        MyRunnable runnable = new MyRunnable();
+        Thread thread = new Thread(runnable);
+        thread.start();
+    }
+}
+ 
+ 
+class MyRunnable implements Runnable{
+     
+    public MyRunnable() {
+         
+    }
+     
+    @Override
+    public void run() {
+        System.out.println("子线程ID："+Thread.currentThread().getId());
+    }
+}
+```
+
+　Runnable的中文意思是“任务”，顾名思义，通过实现Runnable接口，我们定义了一个子任务，然后将子任务交由Thread去执行。注意，这种方式必须将Runnable作为Thread类的参数，然后通过Thread的start方法来创建一个新线程来执行该子任务。如果调用Runnable的run方法的话，是不会创建新线程的，这根普通的方法调用没有任何区别。
+
+　　事实上，查看Thread类的实现源代码会发现Thread类是实现了Runnable接口的。
+
+　　在Java中，这2种方式都可以用来创建线程去执行子任务，具体选择哪一种方式要看自己的需求。直接继承Thread类的话，可能比实现Runnable接口看起来更加简洁，但是由于Java只允许单继承，所以如果自定义类需要继承其他类，则只能选择实现Runnable接口。
+
+#### Java中如何创建进程
+
+　第一种方式是通过Runtime.exec()方法来创建一个进程，第二种方法是通过ProcessBuilder的start方法来创建进程。
+
+##### ProcessBuilder
+
+```java
+//通过ProcessBuilder来启动一个进程打开cmd，并获取ip地址信息
+public class Test {
+    public static void main(String[] args) throws IOException  {
+        ProcessBuilder pb = new ProcessBuilder("cmd","/c","ipconfig/all");
+        Process process = pb.start();
+        Scanner scanner = new Scanner(process.getInputStream());
+         
+        while(scanner.hasNextLine()){
+            System.out.println(scanner.nextLine());
+        }
+        scanner.close();
+    }
+}
+```
+
+第一步是最关键的，就是将命令字符串传给ProcessBuilder的构造器，一般来说，是把字符串中的每个独立的命令作为一个单独的参数，不过也可以按照顺序放入List中传进去。
+
+　　至于其他很多具体的用法不在此进行赘述，比如通过ProcessBuilder的environment方法和directory(File directory)设置进程的环境变量以及工作目录等，感兴趣的朋友可以查看相关API文档。
+
+> 源码分析:
+>
+> 首先要讲的是Process类，Process类是一个抽象类，在它里面主要有几个抽象的方法，这个可以通过查看Process类的源代码得知：
+>
+> 　　位于java.lang.Process路径下：
+>
+> ```java
+> public abstract class Process
+> {
+>     
+>     abstract public OutputStream getOutputStream();   //获取进程的输出流
+>       
+>     abstract public InputStream getInputStream();    //获取进程的输入流
+>  
+>     abstract public InputStream getErrorStream();   //获取进程的错误流
+>  
+>     abstract public int waitFor() throws InterruptedException;   //让进程等待
+>   
+>     abstract public int exitValue();   //获取进程的退出标志
+>  
+>     abstract public void destroy();   //摧毁进程
+> }
+> ```
+>
+> 1）通过ProcessBuilder创建进程
+>
+> ProcessBuilder是一个final类，它有两个构造器：
+>
+> ```java
+> public final class ProcessBuilder
+> {
+>     private List<String> command;
+>     private File directory;
+>     private Map<String,String> environment;
+>     private boolean redirectErrorStream;
+>  
+>     public ProcessBuilder(List<String> command) {
+>     if (command == null)
+>         throw new NullPointerException();
+>     this.command = command;
+>     }
+>  
+>     public ProcessBuilder(String... command) {
+>     this.command = new ArrayList<String>(command.length);
+>     for (String arg : command)
+>         this.command.add(arg);
+>     }
+> ....
+> }
+> ```
+>
+> 构造器中传递的是需要创建的进程的命令参数，第一个构造器是将命令参数放进List当中传进去，第二构造器是以不定长字符串的形式传进去。
+>
+> 　　那么我们接着往下看，前面提到是通过ProcessBuilder的start方法来创建一个新进程的，我们看一下start方法中具体做了哪些事情。下面是start方法的具体实现源代码：
+>
+> ```java
+> public Process start() throws IOException {
+> // Must convert to array first -- a malicious user-supplied
+> // list might try to circumvent the security check.
+> String[] cmdarray = command.toArray(new String[command.size()]);
+> for (String arg : cmdarray)
+>     if (arg == null)
+>     throw new NullPointerException();
+> // Throws IndexOutOfBoundsException if command is empty
+> String prog = cmdarray[0];
+>  
+> SecurityManager security = System.getSecurityManager();
+> if (security != null)
+>     security.checkExec(prog);
+>  
+> String dir = directory == null ? null : directory.toString();
+>  
+> try {
+>     return ProcessImpl.start(cmdarray,
+>                  environment,
+>                  dir,
+>                  redirectErrorStream);
+> } catch (IOException e) {
+>     // It's much easier for us to create a high-quality error
+>     // message than the low-level C code which found the problem.
+>     throw new IOException(
+>     "Cannot run program \"" + prog + "\""
+>     + (dir == null ? "" : " (in directory \"" + dir + "\")")
+>     + ": " + e.getMessage(),
+>     e);
+> }
+> }
+> ```
+>
+> 该方法返回一个Process对象，该方法的前面部分相当于是根据命令参数以及设置的工作目录进行一些参数设定，最重要的是try语句块里面的一句：
+>
+> ```java
+> return ProcessImpl.start(cmdarray,
+>                     environment,
+>                     dir,
+>                     redirectErrorStream);
+> ```
+>
+> 说明真正创建进程的是这一句，注意调用的是ProcessImpl类的start方法，此处可以知道start必然是一个静态方法。那么ProcessImpl又是什么类呢？该类同样位于java.lang.ProcessImpl路径下，看一下该类的具体实现：
+>
+> ProcessImpl也是一个final类，它继承了Process类：
+>
+> ```java
+> final class ProcessImpl extends Process {
+>  
+>     // System-dependent portion of ProcessBuilder.start()
+>     static Process start(String cmdarray[],
+>              java.util.Map<String,String> environment,
+>              String dir,
+>              boolean redirectErrorStream)
+>     throws IOException
+>     {
+>     String envblock = ProcessEnvironment.toEnvironmentBlock(environment);
+>     return new ProcessImpl(cmdarray, envblock, dir, redirectErrorStream);
+>     }
+>  ....
+> }
+> ```
+>
+> 　这是ProcessImpl类的start方法的具体实现，而事实上start方法中是通过这句来创建一个ProcessImpl对象的：
+>
+> ```java
+> return` `new` `ProcessImpl(cmdarray, envblock, dir, redirectErrorStream);
+> ```
+>
+>  　而在ProcessImpl中对Process类中的几个抽象方法进行了具体实现。
+>
+> 　　说明事实上通过ProcessBuilder的start方法创建的是一个ProcessImpl对象。
+
+##### Runtime
+
+```java
+//通过ProcessBuilder来启动一个进程打开cmd，并获取ip地址信息
+public class Test {
+    public static void main(String[] args) throws IOException  {
+        String cmd = "cmd "+"/c "+"ipconfig/all";
+        Process process = Runtime.getRuntime().exec(cmd);
+        Scanner scanner = new Scanner(process.getInputStream());
+         
+        while(scanner.hasNextLine()){
+            System.out.println(scanner.nextLine());
+        }
+        scanner.close();
+    }
+}
+```
+
+>  源码分析：
+>
+> 首先还是来看一下Runtime类和exec方法的具体实现，Runtime，顾名思义，即运行时，表示当前进程所在的虚拟机实例。
+>
+> 　　由于任何进程只会运行于一个虚拟机实例当中，所以在Runtime中采用了单例模式，即只会产生一个虚拟机实例：
+>
+> ```java
+> public class Runtime {
+>     private static Runtime currentRuntime = new Runtime();
+>  
+>     /**
+>      * Returns the runtime object associated with the current Java application.
+>      * Most of the methods of class <code>Runtime</code> are instance
+>      * methods and must be invoked with respect to the current runtime object.
+>      *
+>      * @return  the <code>Runtime</code> object associated with the current
+>      *          Java application.
+>      */
+>     public static Runtime getRuntime() {
+>     return currentRuntime;
+>     }
+>  
+>     /** Don't let anyone else instantiate this class */
+>     private Runtime() {}
+>     ...
+>  }
+> ```
+>
+> 　从这里可以看出，由于Runtime类的构造器是private的，所以只有通过getRuntime去获取Runtime的实例。接下来着重看一下exec方法 实现，在Runtime中有多个exec的不同重载实现，但真正最后执行的是这个版本的exec方法：
+>
+> ```java
+> public Process exec(String[] cmdarray, String[] envp, File dir)
+>    throws IOException {
+>    return new ProcessBuilder(cmdarray)
+>        .environment(envp)
+>        .directory(dir)
+>        .start();
+>    }
+> ```
+>
+> 　可以发现，事实上通过Runtime类的exec创建进程的话，最终还是通过ProcessBuilder类的start方法来创建的。
+
+### 30.Callable、Future和FutureTask
+
+#### Callable与Runnable
+
+　先说一下java.lang.Runnable吧，它是一个接口，在它里面只声明了一个run()方法：
+
+```java
+public interface Runnable {
+    public abstract void run();
+}
+```
+
+由于run()方法返回值为void类型，所以在执行完任务之后无法返回任何结果。
+
+　　Callable位于java.util.concurrent包下，它也是一个接口，在它里面也只声明了一个方法，只不过这个方法叫做call()：
+
+```java
+public interface Callable<V> {
+    /**
+     * Computes a result, or throws an exception if unable to do so.
+     *
+     * @return computed result
+     * @throws Exception if unable to compute a result
+     */
+    V call() throws Exception;
+}
+```
+
+可以看到，这是一个泛型接口，call()函数返回的类型就是传递进来的V类型。
+
+　　那么怎么使用Callable呢？一般情况下是配合ExecutorService来使用的，在ExecutorService接口中声明了若干个submit方法的重载版本：
+
+```java
+<T> Future<T> submit(Callable<T> task);
+<T> Future<T> submit(Runnable task, T result);
+Future<?> submit(Runnable task);
+```
+
+第一个submit方法里面的参数类型就是Callable。
+
+　　暂时只需要知道Callable一般是和ExecutorService配合来使用的，具体的使用方法讲在后面讲述。
+
+　　一般情况下我们使用第一个submit方法和第三个submit方法，第二个submit方法很少使用。
+
+#### Future
+
+Future就是对于具体的Runnable或者Callable任务的执行结果进行取消、查询是否完成、获取结果。必要时可以通过get方法获取执行结果，该方法会阻塞直到任务返回结果。
+
+　　Future类位于java.util.concurrent包下，它是一个接口：
+
+```java
+public interface Future<V> {
+    boolean cancel(boolean mayInterruptIfRunning);
+    boolean isCancelled();
+    boolean isDone();
+    V get() throws InterruptedException, ExecutionException;
+    V get(long timeout, TimeUnit unit)
+        throws InterruptedException, ExecutionException, TimeoutException;
+}
+```
+
+　在Future接口中声明了5个方法，下面依次解释每个方法的作用：
+
+- cancel方法用来取消任务，如果取消任务成功则返回true，如果取消任务失败则返回false。参数mayInterruptIfRunning表示是否允许取消正在执行却没有执行完毕的任务，如果设置true，则表示可以取消正在执行过程中的任务。如果任务已经完成，则无论mayInterruptIfRunning为true还是false，此方法肯定返回false，即如果取消已经完成的任务会返回false；如果任务正在执行，若mayInterruptIfRunning设置为true，则返回true，若mayInterruptIfRunning设置为false，则返回false；如果任务还没有执行，则无论mayInterruptIfRunning为true还是false，肯定返回true。
+- isCancelled方法表示任务是否被取消成功，如果在任务正常完成前被取消成功，则返回 true。
+- isDone方法表示任务是否已经完成，若任务完成，则返回true；
+- get()方法用来获取执行结果，这个方法会产生阻塞，会一直等到任务执行完毕才返回；
+- get(long timeout, TimeUnit unit)用来获取执行结果，如果在指定时间内，还没获取到结果，就直接返回null。
+
+　　也就是说Future提供了三种功能：
+
+　　1）判断任务是否完成；
+
+　　2）能够中断任务；
+
+　　3）能够获取任务执行结果。
+
+　　因为Future只是一个接口，所以是无法直接用来创建对象使用的，因此就有了下面的FutureTask。
+
+##### 实例：
+
+```java
+public class Test {
+    public static void main(String[] args) {
+        ExecutorService executor = Executors.newCachedThreadPool();
+        Task task = new Task();
+        Future<Integer> result = executor.submit(task);
+        executor.shutdown();
+         
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e1) {
+            e1.printStackTrace();
+        }
+         
+        System.out.println("主线程在执行任务");
+         
+        try {
+            System.out.println("task运行结果"+result.get());
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+         
+        System.out.println("所有任务执行完毕");
+    }
+}
+class Task implements Callable<Integer>{
+    @Override
+    public Integer call() throws Exception {
+        System.out.println("子线程在进行计算");
+        Thread.sleep(3000);
+        int sum = 0;
+        for(int i=0;i<100;i++)
+            sum += i;
+        return sum;
+    }
+}
+//子线程在进行计算
+//主线程在执行任务
+//task运行结果4950
+//所有任务执行完毕
+```
+
+#### FutureTask
+
+　我们先来看一下FutureTask的实现：
+
+```java
+public class FutureTask<V> implements RunnableFuture<V>
+```
+
+　FutureTask类实现了RunnableFuture接口，我们看一下RunnableFuture接口的实现：
+
+```java
+public interface RunnableFuture<V> extends Runnable, Future<V> {
+    void run();
+}
+```
+
+　可以看出RunnableFuture继承了Runnable接口和Future接口，而FutureTask实现了RunnableFuture接口。所以它既可以作为Runnable被线程执行，又可以作为Future得到Callable的返回值。
+
+　FutureTask提供了2个构造器：
+
+```java
+public FutureTask(Callable<V> callable) {
+}
+public FutureTask(Runnable runnable, V result) {
+}
+```
+
+　　事实上，FutureTask是Future接口的一个唯一实现类。
+
+##### 示例
+
+```java
+public class Test {
+    public static void main(String[] args) {
+        //第一种方式
+        ExecutorService executor = Executors.newCachedThreadPool();
+        Task task = new Task();
+        FutureTask<Integer> futureTask = new FutureTask<Integer>(task);
+        executor.submit(futureTask);
+        executor.shutdown();
+         
+        //第二种方式，注意这种方式和第一种方式效果是类似的，只不过一个使用的是ExecutorService，一个使用的是Thread
+        /*Task task = new Task();
+        FutureTask<Integer> futureTask = new FutureTask<Integer>(task);
+        Thread thread = new Thread(futureTask);
+        thread.start();*/
+         
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException e1) {
+            e1.printStackTrace();
+        }
+         
+        System.out.println("主线程在执行任务");
+         
+        try {
+            System.out.println("task运行结果"+futureTask.get());
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        } catch (ExecutionException e) {
+            e.printStackTrace();
+        }
+         
+        System.out.println("所有任务执行完毕");
+    }
+}
+class Task implements Callable<Integer>{
+    @Override
+    public Integer call() throws Exception {
+        System.out.println("子线程在进行计算");
+        Thread.sleep(3000);
+        int sum = 0;
+        for(int i=0;i<100;i++)
+            sum += i;
+        return sum;
+    }
+}
+```
+
+### 31.线程的中断
+
+#### 理解：
+
+线程的`thread.interrupt()`方法是中断线程，将会设置该线程的中断状态位，即设置为true，中断的线程是死亡、还是等待新的任务或是继续运行至下一步，就取决于这个程序本身。线程会不时地检测这个中断标示位，以判断线程是否应该被中断（中断标示值是否为true）。它并不像stop方法那样会中断一个正在运行的线程。
+
+#### api：
+
+![中断](images\中断.jpg)
+
+上面列出了与中断有关的几个方法及其行为，可以看到interrupt是中断线程。如果不了解Java的中断机制，这样的一种解释极容易造成误解，认为调用了线程的interrupt方法就一定会中断线程。
+
+其实，Java的中断是一种协作机制。**也就是说调用线程对象的interrupt方法并不一定就中断了正在运行的线程，它只是要求线程自己在合适的时机中断自己。每个线程都有一个boolean的中断状态（这个状态不在Thread的属性上），interrupt方法仅仅只是将该状态置为true。比如对正常运行的线程调用`interrupt()`并不能终止他，只是改变了interrupt标示符。**
+
+一般说来，如果一个方法声明抛出InterruptedException，表示该方法是可中断的,比如wait,sleep,join，也就是说可中断方法会对interrupt调用做出响应（例如sleep响应interrupt的操作包括清除中断状态，抛出InterruptedException）,异常都是由可中断方法自己抛出来的，并不是直接由interrupt方法直接引起的。
+
+**`Object.wait`, `Thread.sleep`方法，会不断的轮询监听 interrupted 标志位，发现其设置为true后，会停止阻塞并抛出 InterruptedException异常。**
+
+#### 几种中断方法：
+
+##### 使用中断信号量中断非阻塞线程
+
+```java
+class Example2 extends Thread {
+    volatile boolean stop = false;// 线程中断信号量
+ 
+    public static void main(String args[]) throws Exception {
+        Example2 thread = new Example2();
+        System.out.println("Starting thread...");
+        thread.start();
+        Thread.sleep(3000);
+        System.out.println("Asking thread to stop...");
+        // 设置中断信号量
+        thread.stop = true;
+        Thread.sleep(3000);
+        System.out.println("Stopping application...");
+    }
+ 
+    public void run() {
+        // 每隔一秒检测一下中断信号量
+        while (!stop) {
+            System.out.println("Thread is running...");
+            long time = System.currentTimeMillis();
+            /*
+             * 使用while循环模拟 sleep 方法，这里不要使用sleep，否则在阻塞时会 抛
+             * InterruptedException异常而退出循环，这样while检测stop条件就不会执行，
+             * 失去了意义。
+             */
+            while ((System.currentTimeMillis() - time < 1000)) {}
+        }
+        System.out.println("Thread exiting under request...");
+    }
+}
+//输出
+//
+Starting thread...
+Thread is running...
+Thread is running...
+Thread is running...
+Asking thread to stop...
+Thread exiting under request...
+Stopping application...
+```
+
+##### **使用thread.interrupt()中断非阻塞状态线程**
+
+```java
+public class Example2 extends Thread {
+    public static void main(String args[]) throws Exception {
+        Example2 thread = new Example2();
+        System.out.println("Starting thread...");
+        thread.start();
+        Thread.sleep(3000);
+        System.out.println("Asking thread to stop...");
+        // 发出中断请求
+        thread.interrupt();
+        Thread.sleep(3000);
+        System.out.println("Stopping application...");
+    }
+
+    public void run() {
+        // 每隔一秒检测是否设置了中断标示
+        while (!Thread.currentThread().isInterrupted()) {
+            System.out.println("Thread is running...");
+            long time = System.currentTimeMillis();
+            // 使用while循环模拟 sleep
+            while ((System.currentTimeMillis() - time < 1000) ) {
+            }
+        }
+        System.out.println("Thread exiting under request...");
+    }
+}
+//输出
+Starting thread...
+Thread is running...
+Thread is running...
+Thread is running...
+Thread is running...
+Asking thread to stop...
+Thread exiting under request...
+Stopping application...
+```
+
+##### **使用thread.interrupt()中断阻塞状态线程**
+
+```java
+public class Example3  extends  Thread{
+    public static void main(String args[]) throws Exception {
+        Example3 thread = new Example3();
+        System.out.println("Starting thread...");
+        thread.start();
+        Thread.sleep(3000);
+        System.out.println("Asking thread to stop...");
+        thread.interrupt();// 等中断信号量设置后再调用
+        Thread.sleep(3000);
+        System.out.println("Stopping application...");
+    }
+
+    public void run() {
+        while (!Thread.currentThread().isInterrupted()) {
+            System.out.println("Thread running...");
+            try {
+                /*
+                 * 如果线程阻塞，将不会去检查中断信号量stop变量，所 以thread.interrupt()
+                 * 会使阻塞线程从阻塞的地方抛出异常，让阻塞线程从阻塞状态逃离出来，并
+                 * 进行异常块进行 相应的处理
+                 */
+                Thread.sleep(1000);// 线程阻塞，如果线程收到中断操作信号将抛出异常
+            } catch (InterruptedException e) {
+                System.out.println("Thread interrupted...");
+                /*
+                 * 如果线程在调用 Object.wait()方法，或者该类的 join() 、sleep()方法
+                 * 过程中受阻，则其中断状态将被清除
+                 */
+                System.out.println(this.isInterrupted());// false
+
+                //中不中断由自己决定，如果需要真真中断线程，则需要重新设置中断位，如果
+                //不需要，则不用调用
+                Thread.currentThread().interrupt();
+                System.out.println(this.isInterrupted());// true
+            }
+        }
+        System.out.println("Thread exiting under request...");
+    }
+}
+//输出
+Starting thread...
+Thread running...
+Thread running...
+Thread running...
+Asking thread to stop...
+Thread running...
+Thread interrupted...
+false
+true
+Thread exiting under request...
+Stopping application...
+```
+
+##### **死锁状态线程无法被中断**
+
+```java
+public class Example4  extends  Thread{
+    public static void main(String args[]) throws Exception {
+        final Object lock1 = new Object();
+        final Object lock2 = new Object();
+        Thread thread1 = new Thread() {
+            public void run() {
+                deathLock(lock1, lock2);
+            }
+        };
+        Thread thread2 = new Thread() {
+            public void run() {
+                // 注意，这里在交换了一下位置
+                deathLock(lock2, lock1);
+            }
+        };
+        System.out.println("Starting thread...");
+        thread1.start();
+        thread2.start();
+        Thread.sleep(3000);
+        System.out.println("Interrupting thread...");
+        thread1.interrupt();
+        thread2.interrupt();
+        Thread.sleep(3000);
+        System.out.println("Stopping application...");
+    }
+
+    static void deathLock(Object lock1, Object lock2) {
+        try {
+            synchronized (lock1) {
+                Thread.sleep(10);// 不会在这里死掉
+                synchronized (lock2) {// 会锁在这里，虽然阻塞了，但不会抛异常
+                    System.out.println(Thread.currentThread());
+                }
+            }
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+            System.exit(1);
+        }
+    }
+}
+
+```
+
+##### 中断IO
+
+```java
+public class Example5  extends  Thread{
+    volatile ServerSocket socket;
+
+    public static void main(String args[]) throws Exception {
+        Example5 thread = new Example5();
+        System.out.println("Starting thread...");
+        thread.start();
+        Thread.sleep(3000);
+        System.out.println("Asking thread to stop...");
+        Thread.currentThread().interrupt();// 再调用interrupt方法
+        thread.socket.close();// 再调用close方法
+        try {
+            Thread.sleep(3000);
+        } catch (InterruptedException e) {
+        }
+        System.out.println("Stopping application...");
+    }
+
+    public void run() {
+        try {
+            socket = new ServerSocket(8888);
+        } catch (IOException e) {
+            System.out.println("Could not create the socket...");
+            return;
+        }
+        while (!Thread.currentThread().isInterrupted()) {
+            System.out.println("Waiting for connection...");
+            try {
+                socket.accept();
+            } catch (IOException e) {
+                System.out.println("accept() failed or interrupted...");
+                Thread.currentThread().interrupt();//重新设置中断标示位
+            }
+        }
+        System.out.println("Thread exiting under request...");
+    }
+}
+//输出
+Starting thread...
+Waiting for connection...
+Asking thread to stop...
+Stopping application...
+accept() failed or interrupted...
+Thread exiting under request...
+```
+
+
+
 ## 数据库
 
 ### 1.mysql的联合索引
@@ -3682,29 +5840,293 @@ SELECT * FROM `table` WHERE a IN (1,2,3) and b > 1;
 
 ### 2.SQL语句
 
+建表
 
+建索引
+
+增
+
+删
+
+改
+
+查
+
+### 3.数据库索引篇
+
+#### 3.1索引是什么？
+
+索引是一种**特殊的文件**(InnoDB数据表上的索引是表空间的一个组成部分)，它们包含着对数据表里所有记录的引用指针。
+
+索引是一种**数据结构**。数据库索引，是数据库管理系统中一个排序的数据结构，以协助快速查询、更新数据库表中数据。
+
+索引的实现通常使用**B树及其变种B+树**。更通俗的说，索引就相当于目录。为了方便查找书中的内容，通过对内容建立索引形成目录。
+
+而且索引是一个文件，它是要占据物理空间的。
+
+MySQL索引的建立对于MySQL的高效运行是很重要的，索引可以大大提高MySQL的检索速度。
+
+比如我们在查字典的时候，前面都有检索的拼音和偏旁、笔画等，然后找到对应字典页码，这样然后就打开字典的页数就可以知道我们要搜索的某一个key的全部值的信息了。
+
+#### 3.2索引的优缺点
+
+**索引的优点**
+
+- 可以大大加快数据的检索速度，这也是创建索引的最主要的原因。
+- 通过使用索引，可以在查询的过程中，使用优化隐藏器，提高系统的性能。
+
+**索引的缺点**
+
+- 时间方面：创建索引和维护索引要耗费时间，具体地，当对表中的数据进行增加、删除和修改的时候，索引也要动态的维护，会降低增/改/删的执行效率；
+- 空间方面：索引需要占物理空间
+
+#### 3.3 索引的分类
+
+- 普通索引：即一个索引只包含单个列，一个表可以有多个单列索引
+
+- 唯一索引：索引列的值必须唯一，但允许有空值
+
+- 复合索引：多列值组成一个索引，专门用于组合搜索，其效率大于索引合并
+
+- 覆盖索引：就是包含了所有查询字段 (where,select,ordery by,group by 包含的字段) 的索引
+
+  覆盖索引的优点：避免 Innodb 表进行索引的二次查询: Innodb 是以聚集索引的顺序来存储的，对于 Innodb 来说，二级索引在叶子节点中所保存的是行的主键信息，如果是用二级索引查询数据的话，在查找到相应的键值后，还要通过主键进行二次查询才能获取我们真实所需要的数据。而在覆盖索引中，二级索引的键值中可以获取所有的数据，避免了对主键的二次查询 ，减少了 IO 操作，提升了查询效率有效减少io的次数。
+
+- 前缀索引：因为可能我们索引的字段非常长，这既占内存空间，也不利于维护。所以我们就想，如果只把很长字段的前面的公共部分作为一个索引，就会产生超级加倍的效果。
+
+- 全文索引(有些引擎不支持)：全文索引主要用来查找文本中的关键字，而不是直接与索引中的值相比较。fulltext索引跟其它索引大不相同，它更像是一个搜索引擎，而不是简单的where语句的参数匹配。fulltext索引配合match against操作使用，而不是一般的where语句加like。目前只有char、varchar，text 列上可以创建全文索引
+
+  ![image-20210409145444000](images\image-20210409145444000.png)
+
+#### 3.4 聚簇索引和非聚簇索引。
+
+​	在 InnoDB 里，索引B+ Tree的叶子节点存储了整行数据的是主键索引，也被称之为聚簇索引，即将数据存储与索引放到了一块，找到索引也就找到了数据。
+
+而索引B+ Tree的叶子节点存储了主键的值的是非主键索引，也被称之为非聚簇索引、二级索引。
+
+聚簇索引与非聚簇索引的区别：
+
+- 非聚集索引与聚集索引的区别在于非聚集索引的叶子节点不存储表中的数据，而是存储该列对应的主键（行号）
+- 对于InnoDB来说，想要查找数据我们还需要根据主键再去聚集索引中进行查找，这个再根据聚集索引查找数据的过程，我们称为**回表**。第一次索引一般是顺序IO，回表的操作属于随机IO。需要回表的次数越多，即随机IO次数越多，我们就越倾向于使用全表扫描 。
+- 通常情况下， 主键索引（聚簇索引）查询只会查一次，而非主键索引（非聚簇索引）需要回表查询多次。当然，如果是覆盖索引的话，查一次即可
+- 注意：MyISAM无论主键索引还是二级索引都是非聚簇索引，而InnoDB的主键索引是聚簇索引，二级索引是非聚簇索引。我们自己建的索引基本都是非聚簇索引。
+
+#### 3.5 索引的底层实现有哪些？
+
+**hash索引：**
+
+基于哈希表实现，只有精确匹配索引所有列的查询才有效，对于每一行数据，存储引擎都会对所有的索引列计算一个哈希码（hash code），并且Hash索引将所有的哈希码存储在索引中，同时在索引表中保存指向每个数据行的指针。
+
+![hash索引](images\hash索引.jpg)
+
+最大的弊端：不能做范围查询，并且 Hash索引遇到大量Hash值相等的情况后性能并不一定就会比B-Tree索引高。
+
+**B-树索引：**
+
+B-Tree能加快数据的访问速度，因为存储引擎不再需要进行全表扫描来获取数据，数据分布在各个节点之中。
+
+![b树索引](images\b树索引.jpg)
+
+**B+树索引：**
+
+是B-Tree的改进版本，同时也是数据库索引索引所采用的存储结构。数据都在叶子节点上，并且增加了顺序访问指针，每个叶子节点都指向相邻的叶子节点的地址。
+
+相比B-Tree来说，进行范围查找时只需要查找两个节点，进行遍历即可。而B-Tree需要获取所有节点，相比之下B+Tree效率更高。
+
+#### 3.6 为什么索引结构默认使用B+树？
+
+- B+树的磁盘读写代价更低：B+树的内部节点并没有指向关键字具体信息的指针，因此其内部节点相对B(B-)树更小，如果把所有同一内部节点的关键字存放在同一盘块中，那么盘块所能容纳的关键字数量也越多，一次性读入内存的需要查找的关键字也就越多，相对`IO读写次数就降低`了。
+- 由于B+树的数据都存储在叶子结点中，分支结点均为索引，方便扫库，只需要扫一遍叶子结点即可，但是B树因为其分支结点同样存储着数据，我们要找到具体的数据，需要进行一次中序遍历按序来扫，所以B+树更加适合在`区间查询`的情况，所以通常B+树用于数据库索引。
+
+#### 3.7 非主键索引一定会回表查询吗？
+
+​	不一定，这涉及到查询语句所要求的字段是否全部命中了索引，如果全部命中了索引，那么就不必再进行回表查询。
+
+一个索引包含（覆盖）所有需要查询字段的值，被称之为"覆盖索引"。
+
+举个简单的例子，假设我们在学生表的成绩上建立了索引，那么当进行`select score from student where score > 90`的查询时，在索引的叶子节点上，已经包含了score 信息，不会再次进行回表查询。
+
+#### 3.8 索引下推
+
+**索引下推是减少回表次数的一种技术，即先对索引包含的字段做判断，再去回表。**
+
+假设有这么个需求，查询表中“名字第一个字是张，性别男，年龄为10岁的所有记录”。那么，查询语句是这么写的：
+
+```csharp
+mysq> select * from tuser where name like '张 %' and age=10 and ismale=1;
+```
+
+根据前面说的“最左前缀原则”，该语句在搜索索引树的时候，只能匹配到名字第一个字是‘张’的记录（即记录ID3），接下来是怎么处理的呢？当然就是从ID3开始，逐个回表，到主键索引上找出相应的记录，再比对age和ismale这两个字段的值是否符合。
+
+但是！MySQL 5.6引入了索引下推优化，可以在索引遍历过程中，**对索引中包含的字段先做判断，过滤掉不符合条件的记录，减少回表字数**。
+
+![索引下推](images\索引下推.png)
+
+#### 3.9 怎么查看Mysql语句有没有用到索引？
+
+通过explain，如以下例子：
+
+```
+EXPLAIN SELECT * FROM employees.titles WHERE emp_no='10001' AND title='Senior Engineer' AND from_date='1986-06-26';
+```
+
+| id   | select_type | table  | partitions | type  | possible_keys | key     | key_len | ref               | filtered | rows | Extra |
+| :--- | :---------- | :----- | :--------- | :---- | :------------ | :------ | :------ | :---------------- | :------- | :--- | :---- |
+| 1    | SIMPLE      | titles | null       | const | PRIMARY       | PRIMARY | 59      | const,const,const | 10       | 1    |       |
+
+- id：在⼀个⼤的查询语句中每个**SELECT**关键字都对应⼀个唯⼀的id ，如explain select * from s1 where id = (select id from s1 where name = 'egon1');第一个select的id是1，第二个select的id是2。有时候会出现两个select，但是id却都是1，这是因为优化器把子查询变成了连接查询 。
+- select_type：select关键字对应的那个查询的类型，如SIMPLE,PRIMARY,SUBQUERY,DEPENDENT,SNION 。
+- table：每个查询对应的表名 。
+- **type：`type` 字段比较重要, 它提供了判断查询是否高效的重要依据依据. 通过 `type` 字段, 我们判断此次查询是 `全表扫描` 还是 `索引扫描` 等。如const(主键索引或者唯一二级索引进行等值匹配的情况下),ref(普通的⼆级索引列与常量进⾏等值匹配),index(扫描全表索引的覆盖索引) 。**
+
+- possible_key：查询中可能用到的索引*(可以把用不到的删掉，降低优化器的优化时间)* 。
+- **key：此字段是 MySQL 在当前查询时所真正使用到的索引。**
+- filtered：查询器预测满足下一次查询条件的百分比 。
+- **rows 也是一个重要的字段. MySQL 查询优化器根据统计信息, 估算 SQL 要查找到结果集需要扫描读取的数据行数. 这个值非常直观显示 SQL 的效率好坏, 原则上 rows 越少越好。**
+- extra：表示额外信息，如Using where,Start temporary,End temporary,Using temporary等。
+
+#### 3.10 为什么官方建议使用自增长主键作为索引？
+
+结合B+Tree的特点，自增主键是连续的，在插入过程中尽量减少页分裂，即使要进行页分裂，也只会分裂很少一部分。并且能减少数据的移动，每次插入都是插入到最后。总之就是减少分裂和移动的频率。
+
+**插入连续的数据：**
+
+![连续插入](images\连续插入.gif)
+
+**插入非连续数据：**
+
+![非连续插入](images\非连续插入.gif)
+
+#### 3.11 创建索引的三种方式？
+
+1.建表时创建：
+
+```mysql
+CREATE TABLE user_index2 (
+ id INT auto_increment PRIMARY KEY,
+ first_name VARCHAR (16),
+ last_name VARCHAR (16),
+ id_card VARCHAR (18),
+ information text,
+ KEY name (first_name, last_name),
+ FULLTEXT KEY (information),
+ UNIQUE KEY (id_card)
+);
+
+```
+
+2.alter命令
+
+```mysql
+ALTER TABLE table_name ADD INDEX index_name (column_list);
+```
+
+ 3.使用CREATE INDEX命令创建。
+
+```mysql
+CREATE INDEX index_name ON table_name (column_list);
+```
+
+#### 3.12 创建索引的注意事项
+
+- 非空字段：应该指定列为NOT NULL，除非你想存储NULL。在mysql中，含有空值的列很难进行查询优化，因为它们使得索引、索引的统计信息以及比较运算更加复杂。你应该用0、一个特殊的值或者一个空串代替空值；
+- 取值离散大的字段：（变量各个取值之间的差异程度）的列放到联合索引的前面，可以通过count()函数查看字段的差异值，返回值越大说明字段的唯一值越多字段的离散程度高；
+- 索引字段越小越好：数据库的数据存储以页为单位一页存储的数据越多一次IO操作获取的数据越大效率越高。
+
+- 经常插入、删除、修改的表要减少索引；
+
+#### 3.13 创建索引的原则
+
+1、最左前缀匹配原则，非常重要的原则，mysql会一直向右匹配直到遇到范围查询(>、<、between、like)就停止匹配，比如a = 1 and b = 2 and c > 3 and d = 4 如果建立(a,b,c,d)顺序的索引，d是用不到索引的，如果建立(a,b,d,c)的索引则都可以用到，a,b,d的顺序可以任意调整。
+
+2、=和in可以乱序，比如a = 1 and b = 2 and c = 3 建立(a,b,c)索引可以任意顺序，mysql的查询优化器会帮你优化成索引可以识别的形式。
+
+3、尽量选择区分度高的列作为索引，区分度的公式是count(distinct col)/count(*)，表示字段不重复的比例，比例越大我们扫描的记录数越少，唯一键的区分度是1，而一些状态、性别字段可能在大数据面前区分度就是0，那可能有人会问，这个比例有什么经验值吗？
+
+使用场景不同，这个值也很难确定，一般需要join的字段我们都要求是0.1以上，即平均1条扫描10条记录。
+
+4、索引列不能参与计算，保持列“干净”，比如from_unixtime(create_time) = ’2014-05-29’就不能使用到索引，原因很简单，b+树中存的都是数据表中的字段值，但进行检索时，需要把所有元素都应用函数才能比较，显然成本太大。
+
+所以语句应该写成create_time = unix_timestamp(’2014-05-29’)。
+
+5、尽量的扩展索引，不要新建索引。比如表中已经有a的索引，现在要加(a,b)的索引，那么只需要修改原来的索引即可。
+
+#### 3.14 sql优化器优化时，一般步骤？选错索引怎么办？
+
+优化器会根据搜索的代价选择索引：比如需要搜索的行数，是否排序等等。
+
+> 怎么判断扫描行数
+
+统计各个索引的基数(一个索引上不同的值的个数，我们称之为“基数”（cardinality）)，选择最大的使用。（选择n个页计算不同的索引的数量，求平均，最后乘以索引的页面数）
+
+> 例子
+
+十万条数据
+
+![image-20210330191850767](images\image-20210330191850767.png)
+
+![image-20210330191952134](images\image-20210330191952134.png)
+
+优化器可能会觉得，虽然按照a扫描1000个值就行，但是之后还是需要按照b排序。所以优化器会直接选择b索引来执行。
+
+但是这样的选择肯定耗时。
+
+> 解决
+
+1.强制使用a索引
+
+```
+select * from t force index (a) where (a between 1 and 1000) and (b between 50000 and 100000) order by b limit 1
+```
+
+2.
+
+```
+select * from t where (a between 1 and 1000) and (b between 50000 and 100000) order by b,a  limit 1
+现在 order by b,a 这种写法，要求按照 b,a 排序，就意味着使用这两个索引都需要排序。因此，扫描行数成了影响决策的主要条件，于是此时优化器选了只需要扫描 1000 行的索引 a。
+```
+
+#### 3.15 索引失效的场景
+
+##### 1、函数导致的索引失效
+
+如：
+
+```
+SELECT * FROM `user` WHERE DATE(create_time) = '2020-09-03';
+```
+
+如果你的索引字段使用了索引，对不起，他是真的不走索引的。
+
+##### 2、运算符导致的索引失效
+
+```
+SELECT * FROM `user` WHERE age - 1 = 20;
+```
+
+如果你对列进行了（+，-，*，/，!）, 那么都将不会走索引。
+
+##### 3、OR引起的索引失效
+
+```
+SELECT * FROM `user` WHERE `name` = '张三' OR height = '175';
+```
+
+OR导致索引是在特定情况下的，并不是所有的OR都是使索引失效，如果OR连接的是同一个字段，那么索引不会失效，反之索引失效。
+
+##### 4、模糊搜索导致的索引失效
+
+```
+SELECT * FROM `user` WHERE `name` LIKE '%冰';
+```
+
+当`%`放在匹配字段前是不走索引的，放在后面才会走索引。
+
+##### 5.NOT IN、NOT EXISTS导致索引失效
 
 ## Spring SpringBoot
 
 ### 1.注解
-
-> @SpringBootApplication
-
-其标志的类是springboot的住配置类，springboot会运行该类的main方法启动spring boot应用。
-
-@SpringBootApplication同时等价于好多注解的功能，主要是@SpringBootConfiguration,@EnableAutoConfiguration 和@ComponentScan这三个功能：
-
-@SpringBootConfiguration其实就是spring中的@Configure，表示当前的类是IOC容器的配置类。
-
-@EnableAutoConfiguration的意思是打开springboot 的自动配置功能
-
-@ComponentScan允许包的自动扫描，扫描当前包及其子包下标注了@Component，@Controller，@Service，@Repository 类并纳入到 spring 容器中进行管理。
-
->@Transactional
-
-实现原理：
-
-
 
 ### 2.Spring aop
 
@@ -4926,10 +7348,543 @@ public class App {
 springaop的三个核心点：
 
 1. 代理对象是怎么生成的(JDK or Cglib)
-
 2. Advice链(即拦截器链)的构造过程以及执行机制
-
 3. 如何在Advice上添加pointcut,并且这个pointcut是如何工作的(实际上起到的过滤作用)
+
+### 3.spring的7种注入bean的方式
+
+- 通过注解注入的一般形式
+- 通过构造方法注入Bean
+- 通过set方法注入Bean
+- 通过属性去注入Bean
+- 通过List注入Bean
+- 通过Map去注入Bean
+
+#### 通过注解注入
+
+- Bean类
+
+```
+ public class MyBean{
+ }
+```
+
+- Configuration类
+
+```
+ //创建一个class配置文件
+ @Configuration
+ public class MyConfiguration{
+  //将一个Bean交由Spring进行管理
+        @Bean
+        public MyBean myBean(){
+            return new MyBean();
+        }
+ }
+```
+
+- Test类
+
+与xml有一点不同，这里在Test中，实例化的不再是ClassPathXmlApplicationContext，而是获取的AnnotationConfigApplicationContext实例。
+
+```
+ ApplicationContext context = new AnnotationConfigApplicationContext(MyConfiguration.class);
+ MyBean myBean = cotext.getBean("myBean",MyBean.class);
+ System.out.println("myBean = " + myBean);
+```
+
+------
+
+上面的代码中MyBean也就是我们需要Spring去管理的一个Bean，他只是一个简单的类。而MyConfiguration中，我们首先用@Configuration注解去标记了该类，这样标明该类是一个Spring的一个配置类，在加载配置的时候会去加载他。
+
+在MyConfiguration中我们可以看到有一个方法返回的是一个MyBean的实例，并且该方法上标注着@Bean的注解，标明这是一个注入Bean的方法，会将下面的返回的Bean注入IOC。
+
+#### 通过构造方法注入Bean
+
+- Bean类
+
+```
+ @Component
+ public class MyBeanConstructor {
+
+     private AnotherBean anotherBeanConstructor;
+
+     @Autowired
+     public MyBeanConstructor(AnotherBean anotherBeanConstructor){
+         this.anotherBeanConstructor = anotherBeanConstructor;
+     }
+
+     @Override
+     public String toString() {
+         return "MyBean{" +
+             "anotherBeanConstructor=" + anotherBeanConstructor +
+             '}';
+     }
+ }
+```
+
+- AnotherBean类
+
+```
+ @Component(value="Bean的id，默认为类名小驼峰")
+ public class AnotherBean {
+ }
+```
+
+- Configuration类
+
+```
+ @Configuration
+ @ComponentScan("com.company.annotationbean")
+ public class MyConfiguration{
+ }
+```
+
+------
+
+这里我们可以发现，和一般方式注入的代码不一样了，我们来看看新的注解都是什么意思：
+
+- @AutoWired
+
+简单粗暴，直接翻译过来的意思就是自动装配:wrench:，还不理解为什么叫自动装配:wrench:？看了下一个注解的解释你就知道了。若是在这里注入的时候指定一个Bean的id就要使用@Qualifier注解
+
+- @Component（默认单例模式）
+
+什么？？这翻译过来是零件，怎么感觉像是修汽车？？是的，Spring管理Bean的方法就是修汽车的方式。我们在需要将一个类变成一个Bean被Spring可以注入的时候加上注解零件@Conmonent，那么我们就可以在加载Bean的时候把他像零件一样装配:wrench:到这个IOC汽车上了
+
+在这里我们还有几个其他的注解也可以实现这个功能，也就是细化的@Component：
+
+- @Controller 标注在Controller层
+- @Service 标注在Service层
+- @Repository 标注在dao层
+- @ComponentScan("")
+
+还是翻译，零件扫描，我们去看看括号里的“零件仓库”里面，哪些“零件”（类）需要被装载，Spring就会去扫描这个包，将里面所有标注了@Component的类进行注入。
+
+这里的通过构造方法进行注入就很好理解了，我们在装配MyBean这个零件的时候，突然发现他必须在AnotherBean的基础上才能安装到IOC里面，那么我们就在每次装配MyBean的时候自动装配:wrench:一个AnotherBean进去。
+
+#### **通过set方法注入Bean**
+
+```
+ @Component
+ public class MyBeanSet {
+
+     private AnotherBean anotherBeanSet;
+
+     @Autowired
+     public void setAnotherBeanSet(AnotherBean anotherBeanSet) {
+         this.anotherBeanSet = anotherBeanSet;
+     }
+
+     @Override
+     public String toString() {
+         return "MyBeanSet{" +
+             "anotherBeanSet=" + anotherBeanSet +
+             '}';
+     }
+ }
+```
+
+- Configuration类 和 Test类
+
+同上一个，就不贴了
+
+------
+
+这里我们发现在setter方法上我们有一个@AutoWired,与上面不同的是，我们不会在实例化该类时就自动装配:wrench:这个对象，而是在显式调用setter的时候去装配。
+
+#### **通过属性去注入Bean**
+
+```
+ @Component
+ public class MyBeanProperty {
+
+     @Autowired
+     private AnotherBean anotherBeanProperty;
+
+     @Override
+     public String toString() {
+         return "MyBeanProperty{" +
+             "anotherBeanProperty=" + anotherBeanProperty +
+             '}';
+     }
+ }
+```
+
+这里我们可以看到我们这个类中需要使用AnotherBean这个实例对象，我们可以通过@AutoWired去自动装配它。
+
+#### **通过List注入Bean**
+
+- MyBeanList类
+
+```
+ @Component
+ public class MyBeanList {
+
+     private List<String> stringList;
+
+     @Autowired
+     public void setStringList(List<String> stringList) {
+         this.stringList = stringList;
+     }
+
+     public List<String> getStringList() {
+         return stringList;
+     }
+ }
+```
+
+- MyConfiguration类
+
+```
+ @Configuration
+ @ComponentScan("annoBean.annotationbean")
+ public class MyConfiguration {
+
+     @Bean
+     public List<String> stringList(){
+        List<String> stringList = new ArrayList<String>();
+         stringList.add("List-1");
+         stringList.add("List-2");
+         return stringList;
+     }
+ }
+```
+
+#### 通过Map去注入Bean
+
+```java
+@Component
+ public class MyBeanMap {
+
+   private Map<String,Integer> integerMap;
+
+   public Map<String, Integer> getIntegerMap() {
+     return integerMap;
+   }
+
+   @Autowired
+   public void setIntegerMap(Map<String, Integer> integerMap) {
+     this.integerMap = integerMap;
+   }
+ }
+
+ @Bean
+  public Map<String,Integer> integerMap(){
+    Map<String,Integer> integerMap = new HashMap<String, Integer>();
+    integerMap.put("map-1",1);
+    integerMap.put("map-2",2);
+    return integerMap;
+  }
+```
+
+### 4.Spring和Springboot的区别
+
+### 5.创建定时任务的几种方式？
+
+#### 1.Spring的注解：
+
+```java
+@Component
+@Configuration    //1.主要用于标记配置类，兼备Component的效果。
+@EnableScheduling  // 2.开启定时任务
+public class SaticScheduleTask {
+
+  @Scheduled(cron = "0/5 * * * * ?") //3.添加定时任务
+  //@Scheduled(fixedRate=5000) //或直接指定时间间隔，例如：5秒
+  private void configureTasks() {
+    System.err.println("执行静态定时任务时间: " + LocalDateTime.now());
+  }
+}
+```
+
+#### 2.Quartz框架
+
+![Quartz1](images\Quartz1.png)
+
+![Quartz2](images\Quartz2.jpg)
+
+![Quartz3](images\Quartz3.png)
+
+#### 3.TimerStack
+
+![TimeTask](images\TimeTask.png)
+
+#### 4.线程池
+
+![线程池定时任务](images\线程池定时任务.png)
+
+### 6.SpringBoot中的@Configuration和@Component的区别
+
+一、@Configuration
+
+```java
+@Target({ElementType.TYPE})
+@Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Component
+public @interface Configuration {
+    @AliasFor(
+        annotation = Component.class
+    )
+    String value() default "";
+}
+```
+
+可以看到在`@Configuration`注解中是包含`@Component`注解的，被`@Configuration`修饰的类被定义为一个Spring容器（应用上下文）
+
+`@Configuration`就相当于Spring配置文件中的`<beans />`标签，里面可以配置bean
+
+二、@Bean
+@Bean相当于Spring配置文件中的`<bean />`标签可以在Spring容器中注入一个bean
+
+```java
+@Configuration
+public class TestConfiguration {
+
+    @Bean
+    public TestBean testBean() {
+        return new TestBean();
+    }
+
+}
+```
+
+上述代码相当于实例化一个TestBean并交给Spring容器管理
+
+ps：
+
+1、@Bean注解在返回实例的方法上，如果未通过@Bean指定bean的名称，则默认与方法名相同
+
+2、@Bean注解默认作用域为`单例singleton作用域`，可通过`@Scope(“prototype”)设置为多例`
+
+三、依赖注入
+
+```java
+@Configuration
+public class TestConfiguration {
+
+    @Bean
+    public TestBean testBean() {
+        return new TestBean();
+    }
+
+    @Bean
+    public DIBean diBean() {
+        return new DIBean(testBean());
+    }  
+
+}
+```
+
+如上述代码，通过在@Bean方法中调用其他@Bean注解的方法来实现依赖注入
+
+ps：
+
+当需要`强制指定实例化bean的顺序`，可以`通过@Order或@DependsOn注解来实现`
+
+除此之外我们还能使用@Component声明Spring Bean
+
+#### @Configuration和@Component区别
+
+```java
+public class Car {
+
+	private int id;
+
+	private String name;
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+}
+
+public class Driver {
+
+	private int id;
+
+	private String name;
+
+	private Car car;
+
+	public int getId() {
+		return id;
+	}
+
+	public void setId(int id) {
+		this.id = id;
+	}
+
+	public String getName() {
+		return name;
+	}
+
+	public void setName(String name) {
+		this.name = name;
+	}
+
+	public Car getCar() {
+		return car;
+	}
+
+	public void setCar(Car car) {
+		this.car = car;
+	}
+
+}
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class MyTestConfig {
+
+	@Bean
+	public Driver driver() {
+		Driver driver = new Driver();
+		driver.setId(1);
+		driver.setName("driver");
+		driver.setCar(car());
+		return driver;
+	}
+
+	@Bean
+	public Car car() {
+		Car car = new Car();
+		car.setId(1);
+		car.setName("car");
+		return car;
+	}
+
+}
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Component
+public class MyTestConfig {
+
+	@Bean
+	public Driver driver() {
+		Driver driver = new Driver();
+		driver.setId(1);
+		driver.setName("driver");
+		driver.setCar(car());
+		return driver;
+	}
+
+	@Bean
+	public Car car() {
+		Car car = new Car();
+		car.setId(1);
+		car.setName("car");
+		return car;
+	}
+
+}
+```
+
+上面两段代码除MyTestConfig类上的`注解不同之外其他都相同`，但Spring对两者的处理方式是完全不一样的。
+
+- 第一段代码会像我们期望的一样正常运行，因为driver()这段代码中driver.setCar(car())方法会由Spring代理执行，
+
+  Spring发现方法所请求的Bean已经在容器中，那么就直接返回容器中的Bean。所以全局只有一个Car对象的实例。
+
+- 第二段代码在执行driver() 时driver.setCar(car())不会被Spring代理，会直接调用car()方法获取一个全新的Car对象实例，所以全局会有多个Car对象的实例
+
+造成这种差异的原因如下:
+
+概括就是 @Configuration 中所有带 @Bean 注解的方法都会被动态代理，因此调用该方法返回的都是同一个实例。
+
+其工作原理是：如果方式是首次被调用那么原始的方法体会被执行并且结果对象会被注册到Spring上下文中，之后所有的对该方法的调用仅仅只是从Spring上下文中取回该对象返回给调用者。
+
+在上面的第二段代码中，driver.setCar(car())只是纯JAVA方式的调用，多次调用该方法返回的是不同的对象实例。
+
+要修正第二段代码中的问题，可以使用@Autowired如下所示:
+
+```java
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Component;
+
+//@Configuration
+@Component
+public class MyTestConfig2 {
+
+	@Autowired
+	Car car;
+	
+	@Bean
+	public Driver driver() {
+		Driver driver = new Driver();
+		driver.setId(1);
+		driver.setName("driver");
+		driver.setCar(car);
+		return driver;
+	}
+
+	@Bean
+	public Car car() {
+		Car car = new Car();
+		car.setId(1);
+		car.setName("car");
+		return car;
+	}
+
+}
+```
+
+## 验证
+
+```java
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+
+public class TestMain {
+
+	public static void main(String[] args) {
+		// TODO Auto-generated method stub
+		// @Configuration注解的spring容器加载方式，用AnnotationConfigApplicationContext替换ClassPathXmlApplicationContext
+		ApplicationContext context = new AnnotationConfigApplicationContext(MyTestConfig.class);
+
+		// 获取bean
+		Driver driver = (Driver) context.getBean("driver");
+
+		// 获取bean
+		Car car = (Car) context.getBean("car");
+
+		boolean result = driver.getCar() == car;
+		System.out.println(result ? "同一个car" : "不同的car");
+
+	}
+
+}
+```
+
+### 7.spring中如何解决循环依赖的问题
+
+
+
+### 8.Spring中单例模式的弊端
+
+大部分时候我们并没有在项目中使用多线程，所以很少有人会关注这个问题。单例 bean 存在线程问题，主要是因为当多个线程操作同一个对象的时候是存在资源竞争的。
+
+常见的有两种解决办法：
+
+1. 在 bean 中尽量避免定义可变的成员变量。
+2. 在类中定义一个 `ThreadLocal` 成员变量，将需要的可变成员变量保存在 `ThreadLocal` 中（推荐的一种方式）。
 
 ## git
 
@@ -5507,28 +8462,17 @@ public class Consumer {
 
 #### 3.4 RabbitMQ集群
 
-RabbitMQ 内部利用 Erlang 提供的分布式通信框架 OTP 来满足上述需求，使客户端在失去一个 RabbitMQ 节点连接的情况下，还是能够重新连接到集群中的任何其他节点继续生产、消费消息。
+##### 1.RabbitMQ 集群有什么用？
 
-RabbitMQ 会始终记录以下四种类型的内部元数据：
+两个用途：
 
-1. 队列元数据
-    包括队列名称和它们的属性，比如是否可持久化，是否自动删除
-2. 交换器元数据
-    交换器名称、类型、属性
-3. 绑定元数据
-    内部是一张表格记录如何将消息路由到队列
-4. vhost 元数据
-    为 vhost 内部的队列、交换器、绑定提供命名空间和安全属性
+- 高可用：某个服务器出现问题，整个 RabbitMQ 还可以继续使用
+- 高容量：集群可以承载更多的消息量
 
-在单一节点中，RabbitMQ 会将所有这些信息存储在内存中，同时将标记为可持久化的队列、交换器、绑定存储到硬盘上。存到硬盘上可以确保队列和交换器在节点重启后能够重建。而在集群模式下同样也提供两种选择：存到硬盘上（独立节点的默认设置），存在内存中。
+##### 2.RabbitMQ 节点的类型有哪些？
 
-> 镜像队列：如果在集群中创建队列，集群只会在单个节点而不是所有节点上创建完整的队列信息（元数据、状态、内容）。结果是只有队列的所有者节点知道有关队列的所有信息，因此当集群节点崩溃时，该节点的队列和绑定就消失了，并且任何匹配该队列的绑定的新消息也丢失了。还好RabbitMQ 2.6.0之后提供了镜像队列以避免集群节点故障导致的队列内容不可用
-
-RabbitMQ 集群中可以共享 user、vhost、exchange等，所有的数据和状态都是必须在所有节点上复制的。当在集群中声明队列、交换器、绑定的时候，这些操作会直到所有集群节点都成功提交元数据变更后才返回。
-
-> 磁盘节点和内存节点：集群中有内存节点和磁盘节点两种类型，内存节点虽然不写入磁盘，但是它的执行比磁盘节点要好。内存节点可以提供出色的性能，磁盘节点能保障配置信息在节点重启后仍然可用，那集群中如何平衡这两者呢？
->
-> RabbitMQ 只要求集群中至少有一个磁盘节点，所有其他节点可以是内存节点，当节点加入火离开集群时，它们必须要将该变更通知到至少一个磁盘节点。如果只有一个磁盘节点，刚好又是该节点崩溃了，那么集群可以继续路由消息，但不能创建队列、创建交换器、创建绑定、添加用户、更改权限、添加或删除集群节点。换句话说集群中的唯一磁盘节点崩溃的话，集群仍然可以运行，但知道该节点恢复，否则无法更改任何东西。
+- 磁盘节点：消息会存储到磁盘
+- 内存节点：消息都存储在内存中，重启服务器消息会丢失，性能高于磁盘类型。
 
 #### 3.5 常见问题
 
@@ -6551,7 +9495,7 @@ public static void main(String[] args) {
 
 2.高效的数据结构：Redis 一共有 5 种数据类型，`String、List、Hash、Set、SortedSet`。不同的数据类型底层使用了一种或者多种数据结构来支撑，目的就是为了追求更快的速度。
 
-3.单线程模型
+3.单线程模型避免了多线程的频繁上下文切换问题
 
 **注意**：Redis 的单线程指的是 **单线程指的是 Redis 键值对读写指令的执行是单线程。**对于 Redis 的持久化、集群数据同步、异步删除等都是其他线程执行。
 
@@ -6579,7 +9523,7 @@ public static void main(String[] args) {
 
 > 1.内存溢出问题：C字符串，如果程序员在字符串修改的时候如果忘记给字符串重新分配足够的空间，那么就会发生内存溢出，如s1和s2内存邻接，忘记给s1分配足够的内存空间, s1的数据就会溢出到s2的空间, 导致s2的内容被修改.
 >
-> 2.重新分配内存问题:在C字符串中，如果对字符串进行修改，那么我们就不得不面临内存重分配。因为C字符串是由一个N+1长度的数组组成，如果字符串的长度变长，我们就必须对数组进行扩容，否则会产生内存溢出。而如果字符串长度变短，我们就必须释放掉不再使用的空间，否则会发生内存泄漏。
+> 2.重新分配内存问题:在C字符串中，如果对字符串进行修改，那么我们就不得不面临内存重分配。因为C字符串是由一个N+1长度的数组组成，如果字符串的长度变长，我们就必须对数组进行扩容，否则会产生**内存溢出**。而如果字符串长度变短，我们就必须释放掉不再使用的空间，否则会发生**内存泄漏**。
 >
 > 其分配策略如下:
 >
@@ -7519,7 +10463,7 @@ Redis 哨兵具备的能力有如下几个：
 >
 > Redis 实例会将自己的哈希槽信息通过 Gossip 协议发送给集群中其他的实例，实现了哈希槽分配信息的扩散。
 >
-> 这样，集群中的每个实例都有所有哈希槽与实例之间的映射关系信息。
+> 这样，集群中的每个实例都有所有**哈希槽与实例之间的映射关系信息**。
 >
 > 当客户端连接任何一个实例，实例就将哈希槽与实例的映射关系响应给客户端，客户端就会将哈希槽与实例映射信息缓存在本地。
 >
@@ -8573,6 +11517,8 @@ ZooKeeper 的过半机制导致不可能产生 2 个 leader，因为少于等于
 
 ##### 7.4 ZAB协议
 
+（ZooKeeper Atomic Broadcast 原子广播）
+
 说白了就是 `ZAB` 协议是如何处理写请求的，上面我们不是说只有 `Leader` 能处理写请求嘛？那么我们的 `Follower` 和 `Observer` 是不是也需要 **同步更新数据** 呢？总不能数据只在 `Leader` 中更新了，其他角色都没有得到更新吧？
 
 不就是 **在整个集群中保持数据的一致性** 嘛？如果是你，你会怎么做呢？
@@ -8664,6 +11610,707 @@ ZooKeeper 的过半机制导致不可能产生 2 个 leader，因为少于等于
 
 至于注册中心也很简单，我们同样也是让 **服务提供者** 在 `zookeeper` 中创建一个临时节点并且将自己的 `ip、port、调用方式` 写入节点，当 **服务消费者** 需要进行调用的时候会 **通过注册中心找到相应的服务的地址列表(IP端口什么的)** ，并缓存到本地(方便以后调用)，当消费者调用服务时，不会再去请求注册中心，而是直接通过负载均衡算法从地址列表中取一个服务提供者的服务器调用服务。
 
-当服务提供者的某台服务器宕机或下线时，相应的地址会从服务提供者地址列表中移除。同时，注册中心会将新的服务地址列表发送给服务消费者的机器并缓存在消费者本机（当然你可以让消费者进行节点监听，我记得 `Eureka` 会先试错，然后再更新）。
+当服务提供者的某台服务器宕机或==下线时，相应的地址会从服务提供者地址列表中移除。同时，注册中心会将新的服务地址列表发送给服务消费者的机器并缓存在消费者本机（当然你可以让消费者进行节点监听，我记得 `Eureka` 会先试错，然后再更新）。
 
 ![Zookeeper注册中心](images\Zookeeper注册中心.jpg)
+
+
+
+12月底系统基本搭建完成
+
+题目自动生成、难度的评估
+
+康复手段:小学生语文授课的方式
+
+2周之后ppt，spring后台服务端搭建：环境搭建，demo演示，数据库mongodb、搭建在服务器上
+
+## ElasticSearch
+
+**以下内容根据：b站“狂神说”，整理。**
+
+### 由来
+
+底层是根据doug cutting的Lucene进一步封装的是一个开源的高扩展的分布式全文检索引擎。它可以近乎实时的存储、检索数据；本身扩展性很好，可以扩展到上百台服务器，处理PB级别的数据。es也使用Java开发并使用 Lucene作为其核心来实现所有索引和搜索的功能，但是它的目的是通过简单的RESTful API来隐藏 Lucene的复杂性，从而让全文搜索变得简单。
+
+> 哪些地方在使用：
+>
+> 百度百科，新闻网站(比如：搜狐网站)，GitHub，电商网站(京东等)
+
+#### ES和Solr的异同：
+
+**同**：都是基于java开发，底层都是基于Lucence进行实现的全文搜索服务器
+
+**不同**：ES通过的 RESTful API 风格隐藏Lucence的复杂性，让全文搜索变得更加简单；并且单纯对已有数据的搜索时Solr更快，但是需要实时建立索引时Solr就慢了，并且随着数据量逐渐增大，ES的优势就越明显
+
+而Solr对外提供的是于Web-service的API接口，用户可以通过http请求进行访问。
+
+> 关于Lucene：
+>
+> 是个全文检索引擎的架构，里面包含许多工具包，提供查询引擎和索引引擎。
+>
+> 何为全文检索：
+>
+> 全文搜索引擎是名副其实的搜索引擎，国外具代表性的有Google、Fast/AllTheWeb、AltaVista、 Inktomi、Teoma、WiseNut等，国内著名的有百度（Baidu）。它们都是通过从互联网上提取的各个网站的信息（以网页文字为主）而建立的数据库中，检索与用户查询条件匹配的相关记录，然后按一定的排列顺序将结果返回给用户，因此他们是真正的搜索引擎。
+
+#### ELK(ElaticStack)
+
+ELK是Elasticsearch、Logstash、Kibana三大开源框架首字母大写简称。市面上也被成为Elastic Stack。
+
+> ​		Elasticsearch是一个基于Lucene、分布式、通过Restful方式进行交互的近实时搜索平台框 架。像类似百度、谷歌这种大数据全文搜索引擎的场景都可以使用Elasticsearch作为底层支持框架，可见Elasticsearch提供的搜索能力确实强大,市面上很多时候我们简称Elasticsearch为es。m默认端口：9200(elasticsearch-head-master可视化工具默认端口9100)
+>
+> ​		Logstash是ELK 的中央数据流引擎，用于从不同目标（文件/数据存储/MQ）收集的不同格式数据，经过过滤后支持输出 到不同目的地（文件/MQ/redis/elasticsearch/kafka等）
+>
+> ​		Kibana可以将elasticsearch的数据通过友好 的页面展示出来，提供实时分析的功能（默认端口5601，kibana会自动去访问9200，也就是elasticsearch的端口号，所以elasticsearch这个时候必须启动着，然后就可以使用kibana了）。
+>
+> ELK不仅仅适用于日志分析，它还可以支持其它任何数据分析和收集的场景，日志分析和收集只是更具有代表性。
+
+### 核心概念：
+
+![es概念](images\es概念.png)
+
+**物理设计：**
+
+elasticsearch 在后台把每个索引划分成多个分片，每分分片可以在集群中的不同服务器间迁移
+
+**逻辑设计：**
+
+一个索引类型中，包含多个文档，比如说文档1，文档2。 当我们索引一篇文档时，可以通过这样的一各 顺序找到 它: 索引 ▷ 类型 ▷ 文档ID ，通过这个组合我们就能索引到某个具体的文档。 注意:ID不必是整 数，实际上它是个字符串。
+
+**分片：**
+
+![分片](images\分片.png)
+
+一个集群至少有一个节点，而一个节点就是一个elasricsearch进程，节点可以有多个索引默认的，如果 你创建索引，那么索引将会有个5个分片 ( primary shard ,又称主分片 ) 构成的，每一个主分片会有一个 副本 ( replica shard ,又称复制分片 )。
+
+上图是一个有3个节点的集群，可以看到主分片和对应的复制分片都不会在同一个节点内，这样有利于某 个节点挂掉 了，数据也不至于丢失。 实际上，一个分片是一个Lucene索引，一个包含倒排索引的文件目录，倒排索引的结构使得elasticsearch在不扫描全部文档的情况下，就能告诉你哪些文档包含特定的 关键字。
+
+​	**主分片的好处：**
+
+				\- 允许你水平分割/扩展你的内容容量
+	 			 \- 允许你在分片（潜在地，位于多个节点上）之上进行分布式的、并行的操作，进而提高性能/吞吐量
+
+​	**复制分片的好处：**
+
+		\- 在分片/节点失败的情况下，提供了高可用性。因为这个原因，注意到复制分片从不与原/主要（original/primary）分片置于同一节点上是非常重要的。
+	  	\- 扩展你的搜索量/吞吐量，因为搜索可以在所有的复制上并行运行	
+
+### 倒排索引：
+
+通过关键词能够找到文档的索引机制，我们可以通过倒排索引在常数时间复杂度内快速找到文档id
+
+理解：
+
+```sql
+SELECT column_name(s)
+FROM table_name
+WHERE (column_name LIKE 'study' and column_name LIKE 'happy')
+```
+
+假如表中存有 1000w 条记录，那么这条 sql 将会依次检索这1000w 条记录，所要消耗的时间随着记录数增多而提高。这种方式在应对海量数据的时候，便有些力不从心。
+
+既然我们要在 **文档（记录）** 中查找指定的 **单词（关键字）**，最终查找的是 **单词（关键字）** 在某一个文档中存不存在，存在于哪一个文档中。那么我们可以反过来直接根据 **单词（关键字）** 建立一个索引表，通过检索关键字直接找到所有包含关键字的文档，这便是 **倒排索引**。
+
+**底层的数据结构**：通过有有限状态机构造的一种字典树结构，将有共同前缀和共同后缀的放在一起，后缀中最后指向文档id。
+
+优点：
+
+![FST](images\FST.png)
+
+（1）空间占用小。通过对词典中单词前缀和后缀的重复利用，压缩了存储空间；
+
+（2）查询速度快。O(len(str))的查询时间复杂度。
+
+### IK分词器
+
+分词：即把一段中文或者别的划分成一个个的关键字，我们在**搜索时**候会把自己的信息进行分词，会把 **数据库中或者索引库中**的数据进行分词，然后进行一个匹配操作，默认的中文分词是将每个字看成一个 词，比如 “我爱狂神” 会被分为"我","爱","狂","神"，这显然是不符合要求的，所以我们需要安装中文分词 器ik来解决这个问题。 
+
+​	IK提供了两个分词算法：ik_smart 和 ik_max_word，其中 ik_smart 为最少切分(优先匹配最长词)，ik_max_word为最细 粒度划分！
+
+​	es可以设置词库，进入elasticsearch/plugins/ik/config目录 ,新建一个my.dic词库文件，编辑内容即可。同时修改IKAnalyzer.cfg.xml（在ik/config目录下）
+
+```xml
+<properties>
+<comment>IK Analyzer 扩展配置</comment>
+<!-- 用户可以在这里配置自己的扩展字典 -->
+<entry key="ext_dict">my.dic</entry>
+<!-- 用户可以在这里配置自己的扩展停止词字典 -->
+<entry key="ext_stopwords"></entry>
+</properties>
+```
+
+### RESTful风格说明
+
+> 说明：在elastisearch5版本前，一个索引下可以创建多个类型，但是在elastisearch5后， 一个索引只能对应一个类型，而id相当于关系型数据库的主键id若果不指定就会默认生成一个20位的 uuid，属性相当关系型数据库的column(列)。  所以现在也可以不写类型名称。
+
+![rest](images\rest.png)
+
+#### 索引(增删查)
+
+```json
+# 命令解释
+# PUT 创建命令 test1 索引 type1 类型 1 id
+PUT /test1/type1/1
+{
+"name":"狂神说", // 属性
+"age":16 // 属性
+}
+#返回
+{
+"acknowledged" : true,
+"shards_acknowledged" : true,
+"index" : "test2"
+}
+```
+
+返回结果：
+
+```json
+
+{
+"_index" : "test1", // 索引
+"_type" : "type1", // 类型
+"_id" : "1", // id
+"_version" : 1, // 版本
+"result" : "created", // 操作类型
+"_shards" : { // 分片信息
+"total" : 2,
+"successful" : 1,
+"failed" : 0
+},
+"_seq_no" : 0,
+"_primary_term" : 1
+}
+
+```
+
+可以看出来，我们并没有指定name,age字段的类型。此时es会默认给我配置字段类型！
+
+当然，我们也可以**指定类型**
+
+注意：keyword 字段类型不会被分析器分析，
+
+其他类型字符串类型 text 、 keyword 数值类型 long, integer, short, byte, double, float, half_float, scaled_float 日期类型 date te布尔值类型 boolean 二进制类型 binary 等等......
+
+```json
+PUT /test2
+{
+"mappings": {
+    "properties": {
+            "name":{
+            "type": "text"
+            },
+            "age":{
+            "type": "long"
+            },
+            "birthday":{
+            "type": "date"
+            }
+    	}
+	}
+}
+
+```
+
+**查看索引字段**
+
+> 不指定类型默认是doc，文档id是20位的uuid
+
+```json
+GET test2
+
+#返回
+{
+"test2" : {
+	"aliases" : { },
+	"mappings" : {
+        "properties" : {
+        "age" : {
+        "type" : "long"
+        },
+        "birthday" : {
+        "type" : "date"
+        },
+        "name" : {
+        "type" : "text"
+        }
+	}
+},
+"settings" : {
+        "index" : {
+        "creation_date" : "1585384302712",
+        "number_of_shards" : "1",
+        "number_of_replicas" : "1",
+        "uuid" : "71TUZ84wRTW5P8lKeN4I4Q",
+        "version" : {
+        "created" : "7060199"
+        },
+        "provided_name" : "test2"
+        }
+}
+}
+}
+```
+
+**删除索引**
+
+```json
+DELETE /test1
+```
+
+#### 文档(CRUD)
+
+##### 增加：
+
+```json
+PUT /kuangshen/user/1
+{
+"name":"狂神说",
+"age":18,
+"desc":"一顿操作猛如虎，一看工资2500",
+"tags":["直男","技术宅","温暖"]
+}
+PUT /kuangshen/user/2
+{
+"name":"张三",
+"age":3,
+"desc":"法外狂徒",
+"tags":["渣男","旅游","交友"]
+}
+PUT /kuangshen/user/3
+{
+"name":"李四",
+"age":30,
+"desc":"mmp，不知道怎么形容",
+"tags":["靓女","旅游","唱歌"]
+}
+```
+
+此时通过elasticsearch-head-master查看(后边将不进行展示)：
+
+![es可视化工具](images\es可视化工具.png)
+
+**覆盖**：
+
+此时是直接覆盖id为1的数据，哪怕字段比之前少了，也是直接覆盖。
+
+```json
+PUT /kuangshen/user/1
+{
+"name":"狂神说Java",
+"age":18,
+"desc":"一顿操作猛如虎，一看工资2.5",
+"tags":["直男","技术宅","温暖"]
+}
+
+```
+
+##### 改：
+
+**我们使用 POST 命令，在 id 后面跟 _update ，要修改的内容放到 doc 文档(属性)中即可**
+
+和上面的相比，只需要写更新的字段即可，其他字段还是保持原来的不变。如果用put这样操作，新数据，就只包含这两个字段。
+
+```json
+POST /kuangshen/user/1/_update
+{
+"doc":{
+"name":"狂神说Java",
+"desc":"关注狂神公众号每日更新文章哦"
+}
+}
+
+```
+
+##### 删除：
+
+```
+delete /索引名
+```
+
+##### 查(重点)：
+
+​	**条件查询**
+
+```
+GET kuangshen/user/_search?q=name:狂神说
+
+//返回
+{
+"took" : 16,
+"timed_out" : false,
+"_shards" : {
+"total" : 1,
+"successful" : 1,
+"skipped" : 0,
+"failed" : 0
+},
+"hits" : {
+    "total" : {
+    "value" : 1, # 一共1条数据
+    "relation" : "eq"
+    },
+    "max_score" : 1.4229509,
+    "hits" : [
+        {
+        "_index" : "kuangshen",
+        "_type" : "user",
+        "_id" : "1",
+        "_score" : 1.4229509,
+        "_source" : {
+        "name" : "狂神说Java",
+        "age" : 18,
+        "desc" : "关注狂神公众号每日更新文章哦",
+        "tags" : [
+        "直男",
+        "技术宅",
+        "温暖"
+        ]
+        }
+        }
+    ]
+    }
+}
+
+```
+
+**构建查询**
+
+```json
+#q?name=...等价于这一种
+GET kuangshen/user/_search
+{
+    "query":{
+    "match":{
+    "name": "狂神"
+    }
+    }
+}
+
+```
+
+​			同理，查询所有数据
+
+```json
+GET kuangshen/user/_search #这是一个查询但是没有条件
+#等价于这种
+GET kuangshen/user/_search
+{
+"query":{
+"match_all": {}
+}
+```
+
+**过滤属性：**
+
+我们仅是需要查看 name 和 desc 两个属性
+
+```json
+GET kuangshen/user/_search
+{
+    "query":{
+    "match_all": {}
+    },
+    "_source": ["name","desc"]
+}
+
+
+#返回
+{
+"took" : 1,
+"timed_out" : false,
+"_shards" : {
+"total" : 1,
+"successful" : 1,
+"skipped" : 0,
+"failed" : 0
+},
+"hits" : {
+"total" : {
+"value" : 3,
+"relation" : "eq"
+},
+"max_score" : 1.0,
+"hits" : [
+{
+"_index" : "kuangshen",
+"_type" : "user",
+"_id" : "2",
+"_score" : 1.0,
+"_source" : {
+"name" : "张三",
+"desc" : "法外狂徒"
+}
+},
+{
+"_index" : "kuangshen",
+"_type" : "user",
+"_id" : "3",
+"_score" : 1.0,
+"_source" : {
+"name" : "李四",
+"desc" : "mmp，不知道怎么形容"
+}
+},
+{
+"_index" : "kuangshen",
+"_type" : "user",
+"_id" : "1",
+"_score" : 1.0,
+"_source" : {
+"name" : "狂神说Java",
+"desc" : "关注狂神公众号每日更新文章哦"
+}
+}
+]
+}
+}
+
+```
+
+**排序查询：**
+
+```json
+GET kuangshen/user/_search
+{
+    "query":{
+    "match_all": {}
+    },
+    "sort": [
+    {
+    "age": {
+    "order": "desc"
+    }
+    }
+    ]
+}
+
+```
+
+**分页查询：**
+
+```json
+GET kuangshen/user/_search
+{
+    "query":{
+    "match_all": {}
+    },
+    "sort": [
+    {
+    "age": {
+    "order": "asc"
+    }
+    }
+    ],
+    "from": 0, # 从第n条开始
+    "size": 1 # 返回n条数据
+}
+```
+
+**布尔查询：**
+
+```json
+GET kuangshen/user/_search
+#and的感觉
+{
+    "query": {
+    "bool": {
+    "must": [
+        {
+        "match": {
+        "name": "狂神说"
+        }
+        },
+        {
+        "match": {
+        "age": 3
+        }
+        }
+    ]
+    }
+    }
+}
+```
+
+```json
+GET kuangshen/user/_search
+#or的感觉
+{
+    "query": {
+    "bool": {
+    "should": [
+    {
+    "match": {
+    "name": "狂神说"
+    }
+    },
+    {
+    "match": {
+    "age": 18
+    }
+    }
+    ]
+    }
+    }
+}
+
+```
+
+```json
+GET kuangshen/user/_search
+{
+    "query": {
+    "bool": {
+    "must_not": [
+        {
+        "match": {
+        "age": 18
+        }
+        }
+    ]
+    }
+    }
+}
+
+```
+
+**过滤器：**
+
+其中gt 表示大于
+
+ gte 表示大于等于 
+
+lt 表示小于 
+
+lte 表示小于等于
+
+```json
+GET kuangshen/user/_search
+{
+"query":{
+    "bool": {
+        "must": [
+        {
+        "match": {
+        "name": "狂神"
+        }
+        }
+        ],
+        "filter": {
+        "range": {
+            "age": {
+            "gt": 10
+        }
+        }
+        }
+    }
+}
+}
+```
+
+**多标签查询：**
+
+返回：只要含有这个标签满足一个就给我返回这个数据了。
+
+```json
+GET kuangshen/user/_search
+{
+    "query":{
+    "match": {
+    "tags": "男 技术"
+    }
+    }
+}
+
+```
+
+**term查询：**
+
+term和match的区别: match是经过分析(analyer)的，也就是说，文档是先被分析器处理了，根据不同的分析器，分析出 的结果也会不同，在会根据分词 结果进行匹配。 term是不经过分词的，直接去倒排索引查找精确的值。
+
+多个精确查找：
+
+```json
+PUT testdb/_doc/3
+{
+"t1": "22",
+"t2": "2020-4-16"
+}
+PUT testdb/_doc/4
+{
+"t1": "33",
+"t2": "2020-4-17"
+}
+# 查询 精确查找多个值
+GET testdb/_search
+{
+"query": {
+"bool": {
+"should": [
+{
+"term": {
+"t1": "22"
+}
+},
+{
+"term": {
+"t1": "33"
+}
+}
+]
+}
+}
+}
+#等价于
+GET testdb/_doc/_search
+{
+"query": {
+"terms": {
+"t1": ["22", "33"]
+}
+}
+}
+```
+
+**高亮显示：**
+
+```json
+GET kuangshen/user/_search
+    {
+    "query":{
+    "match": {
+    "name": "狂神"
+    }
+    },
+    "highlight" :{
+    "fields": {
+    "name":{}
+    }
+    }
+}
+
+```
+
+自定义样式：
+
+```json
+GET kuangshen/user/_search
+{
+    "query":{
+    "match": {
+    "name": "狂神"
+    }
+    },
+    "highlight" :{
+    "pre_tags": "<b class='key' style='color:red'>",
+    "post_tags": "</b>",
+    "fields": {
+    "name":{}
+    }
+    }
+}
+```
+
+### SpringBoot集成与项目实战
+
+见github。
+
