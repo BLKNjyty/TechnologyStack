@@ -5719,7 +5719,15 @@ accept() failed or interrupted...
 Thread exiting under request...
 ```
 
+## javaWeb
 
+### 1.servlet过滤器(**javax.servlet.Filter**)
+
+[参考博文](https://blog.51cto.com/doublelinux/2141264)
+
+#### 原生的servlet
+
+#### springboot集成
 
 ## 数据库
 
@@ -7614,7 +7622,7 @@ public class SaticScheduleTask {
 
 ![线程池定时任务](images\线程池定时任务.png)
 
-### 6.SpringBoot中的@Configuration和@Component的区别
+### 6.@Configuration和@Component
 
 一、@Configuration
 
@@ -7685,7 +7693,7 @@ ps：
 
 除此之外我们还能使用@Component声明Spring Bean
 
-#### @Configuration和@Component区别
+**@Configuration和@Component区别**
 
 ```java
 public class Car {
@@ -7846,7 +7854,7 @@ public class MyTestConfig2 {
 }
 ```
 
-## 验证
+#### 验证
 
 ```java
 import org.springframework.context.ApplicationContext;
@@ -7873,11 +7881,15 @@ public class TestMain {
 }
 ```
 
-### 7.spring中如何解决循环依赖的问题
+###  7.CommandLineRunner
 
+[参考博文](https://www.cnblogs.com/chenpi/p/9696310.html)
 
+### 8.@Valid和@Validated
 
-### 8.Spring中单例模式的弊端
+### 9.spring中如何解决循环依赖的问题
+
+### 10.Spring中单例模式的弊端
 
 大部分时候我们并没有在项目中使用多线程，所以很少有人会关注这个问题。单例 bean 存在线程问题，主要是因为当多个线程操作同一个对象的时候是存在资源竞争的。
 
@@ -7885,6 +7897,10 @@ public class TestMain {
 
 1. 在 bean 中尽量避免定义可变的成员变量。
 2. 在类中定义一个 `ThreadLocal` 成员变量，将需要的可变成员变量保存在 `ThreadLocal` 中（推荐的一种方式）。
+
+### 11.[Spring Boot读取配置文件的几种方式](https://segmentfault.com/a/1190000023125264)
+
+
 
 ## git
 
@@ -7931,7 +7947,7 @@ git pull origin master
 然后开发新功能时，就可以切换出一个新分支：
 
 ```bash
-git checkout - feat/功能描述名称（比如my_feature）
+git checkout -b feat/功能描述名称（比如my_feature）
 ```
 
 
@@ -10835,6 +10851,8 @@ QUEUED
 
   原理：先去监视money，当我们在事务中执行时，会去比较值钱监视的money值，如果改变了，则执行失败
 
+## 日志
+
 ## 操作系统
 
 ### 1.各种IO模型
@@ -12314,3 +12332,4 @@ GET kuangshen/user/_search
 
 见github。
 
+## Swagger
