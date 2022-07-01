@@ -1,4 +1,3 @@
-
 # Spring IOC
 
 ## 	概念:
@@ -152,7 +151,7 @@ public class App
 
 
 
-## 整体流程：
+## [整体流程](https://javadoop.com/post/spring-ioc#toc_7)：
 
 
 
@@ -161,6 +160,8 @@ public class App
 
 
 ### 源码分析
+
+
 
 #### 从 ClassPathXmlApplicationContext的构造方法看起
 
@@ -316,130 +317,7 @@ public String replacePlaceholders(String value, PlaceholderResolver placeholderR
 	}
 ```
 #### refresh：核心方法
-```plantuml
-@startuml
-class ClassPathXmlApplicationContext extends AbstractXmlApplicationContext {
-   setConfigLocations(configLocations);
-}
-class AbstractXmlApplicationContext extends AbstractRefreshableConfigApplicationContext {
-   void loadBeanDefinitions();//加载各个Bean到BeanFactory中
-   void loadBeanDefinitions(beanDefinitionReader);
-
-}
-class AbstractRefreshableConfigApplicationContext extends  AbstractRefreshableApplicationContext{
-
-}
-AbstractRefreshableApplicationContext -->XmlBeanDefinitionReader 
-class AbstractRefreshableApplicationContext extends AbstractApplicationContext{
-   void refreshBeanFactory();//关闭旧的创建新的BeanFactory，加载注册Bean
-   void customizeBeanFactory();//BeanDefinition的覆盖和循环引用问题
-}
-AbstractRefreshableApplicationContext -->DefaultListableBeanFactory 
-class AbstractApplicationContext extends ConfigurableApplication{
-   void refresh();//总流程
-   ConfigurableListableBeanFactory obtainFreshBeanFactory();//初始化BeanFactory,加载注册Bean
-   void prepareBeanFactory(ConfigurableListableBeanFactory beanFactory);//设置factory的类加载器，添加BeanPostProcessor
-   void finishBeanFactoryInitialization(ConfigurableListableBeanFactory beanFactory);//初始化所有的single bean，一些有特殊要求的bean(实现了BeanFactoryPostProcessor)的都已经初始化过了
-}
-interface ConfigurableApplication extends ApplicationContext{
-
-}
-interface ApplicationContext implements BeanFacoory{
-
-}
-class GenericApplicationContext extends AbstractApplicationContext{
-
-}
-class AnnotationConfigApplicationContext extends GenericApplicationContext{
-
-}
-interface BeanFacoory #light{
-
-}
-interface ListableBeanFactory #light implements BeanFacoory{
-
-}
-interface HiberarchicalBeanFactory #light implements BeanFacoory{
-
-}
-
-interface AutowireCapableBeanFactory #light implements BeanFacoory{
-
-}
-interface  ConfigurableListableBeanFactory  #light extends ListableBeanFactory,AutowireCapableBeanFactory,ConfigurableBeanFactory{
-
-}
-
-interface ConfigurableBeanFactory  #light extends HiberarchiinterfacecalBeanFactory{
-
-}
-class AbstractBeanFactory  #light extends ConfigurableBeanFactory{
-   Object getBean(String name);//从容器里取bean(初始化过程也在其中)
-   <T> T doGetBean();//
-}
-class AbstractAutowireCapableBeanFactory #light extends AbstractBeanFactory,AutowireCapableBeanFactory{
-Object createBean(String beanName, RootBeanDefinition mbd, Object[] args);//总
-createBeanInstance();//创建实例---实例化完成！
-populateBean();//属性,依赖注入
- initializeBean();//回调方法
-}
-AbstractAutowireCapableBeanFactory *-- InstantiationStrategy 
-class SimpleInstantiationStrategy #light implements InstantiationStrategy{
-
-}
-interface InstantiationStrategy #light{
-
-}
-class DefaultListableBeanFactory #light extends AbstractAutowireCapableBeanFactory,ConfigurableListableBeanFactory implements BeanDefinitionRegistry{
-   void registerBeanDefinition(String beanName, BeanDefinition beanDefinition);//注册bean
-   void preInstantiateSingletons();//创建所有的单例bean
-}
-
-
-class AbstractBeanDefinitionReader #LightSalmon{
-   
-}
-class XmlBeanDefinitionReader #HotPink extends AbstractBeanDefinitionReader{
-   int loadBeanDefinitions(EncodedResource encodedResource)；
-   int doLoadBeanDefinitions(InputSource inputSource, Resource resource);
-   int registerBeanDefinitions(Document doc, Resource resource);
-}
-XmlBeanDefinitionReader *--BeanDefinitionDocumentReader
-class AbstractBeanDefinitionReader #HotPink{
-
-}
-interface BeanDefinitionDocumentReader #HotPink{
-
-}
-class DefaultBeanDefinitionDocumentReader  #HotPink implements BeanDefinitionDocumentReader{
-   void registerBeanDefinitions(Document doc, XmlReaderContext readerContext)//一个配置文件终于转换为一颗 DOM 树
-   void doRegisterBeanDefinitions(Element root);//从根节点解析这课树
-   void parseBeanDefinitions(Element root, BeanDefinitionParserDelegate delegate)//解析default namespace下或不是下的标签
-   void parseDefaultElement(Element ele, BeanDefinitionParserDelegate delegate) //处理四个标签
-
-
-}
-DefaultBeanDefinitionDocumentReader *--BeanDefinitionParserDelegate
-class BeanDefinitionParserDelegate #HotPink{
- BeanDefinitionHolder parseBeanDefinitionElement(Element ele)
-}
-DefaultBeanDefinitionDocumentReader ..>BeanDefinitionReaderUtils
-class BeanDefinitionHolder #lightPink{
-      BeanDefinition beanDefinition;
-      String beanName;
-      String[] aliases;
-}
-class BeanDefinitionReaderUtils  #lightPink{
-void registerBeanDefinition(
-			BeanDefinitionHolder definitionHolder, BeanDefinitionRegistry registry)；//注册bean
-}
-BeanDefinitionReaderUtils..>BeanDefinitionRegistry
-interface BeanDefinitionRegistry  #lightPink{
-
-}
-
-@enduml
-```
+![springioc](\images\springioc.png)
 
 ```java
 //之所以不叫init()方法，是因为ApplicationContext 建立之后，还可以调用此方法进行重建，所以refresh()更符合语义
